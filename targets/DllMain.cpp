@@ -17,6 +17,7 @@
 #include "ReplayManager.hpp"
 #include "DllRollbackManager.hpp"
 #include "DllTrialManager.hpp"
+#include "ExternalIpAddress.hpp"
 
 #include <windows.h>
 
@@ -100,6 +101,7 @@ struct DllMain
         , public PtrToRefChangeMonitor<Variable, uint32_t>::Owner
         , public SpectatorManager
         , public DllControllerManager
+        , public ExternalIpAddress::Owner
 {
     // NetplayManager instance
     NetplayManager netMan;
@@ -165,6 +167,8 @@ struct DllMain
 
     // The minimum number of frames that must run normally, before we're allowed to do another rollback
     uint8_t minRollbackSpacing = 2;
+
+    ExternalIpAddress externalIpAddress;
 
 #ifndef RELEASE
     // Local and remote SyncHashes
@@ -1850,6 +1854,11 @@ struct DllMain
                     serverCtrlSocket = SmartSocket::listenTCP ( this, netMan.config.broadcastPort );
                     LOG ( "serverCtrlSocket=%08x", serverCtrlSocket.get() );
 
+                    DllControllerManager::displayIPs = true;
+                    DllControllerManager::port = std::to_string(serverCtrlSocket->address.port);
+                    DllControllerManager::localIP = getInternalIpAddresses();
+                    
+
                     // Update the broadcast port and send over IPC
                     netMan.config.broadcastPort = serverCtrlSocket->address.port;
                     netMan.config.invalidate();
@@ -1950,6 +1959,17 @@ struct DllMain
         }
     }
 
+    // ExternalIpAddress callbacks
+    void externalIpAddrFound ( ExternalIpAddress *extIpAddr, const string& address ) override
+    {
+        DllControllerManager::remoteIP = address;
+    }
+
+    void externalIpAddrUnknown ( ExternalIpAddress *extIpAddr ) override
+    {
+        DllControllerManager::remoteIP = "Unknown";
+    }
+
     // DLL callback
     void callback()
     {
@@ -1984,8 +2004,11 @@ struct DllMain
     DllMain()
         : SpectatorManager ( &netMan, &procMan )
         , worldTimerMoniter ( this, Variable::WorldTime, *CC_WORLD_TIMER_ADDR )
+        , externalIpAddress ( this )
     {
         // Timer and controller initialization is not done here because of threading issues
+
+        externalIpAddress.start();
 
         procMan.connectPipe();
 

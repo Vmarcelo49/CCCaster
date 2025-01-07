@@ -453,7 +453,7 @@ int main ( int argc, char *argv[] )
             ui.setDefaultRollback ( num );
     }
 
-    RunFuncPtr run = ( opt[Options::FakeUi] ? runFake : runMain ); // why did passing a funcptr through 3 funcs seem like the ideal way??
+    RunFuncPtr run = ( opt[Options::FakeUi] ? runFake : runMain );
 
     // Warn on invalid command line opt
     for ( Option *it = opt[Options::Unknown]; it; it = it->next() )

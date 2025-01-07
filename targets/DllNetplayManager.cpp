@@ -771,6 +771,7 @@ void NetplayManager::setState ( NetplayState state )
 uint16_t NetplayManager::getInput ( uint8_t player )
 {
     ASSERT ( player == 1 || player == 2 );
+
     switch ( _state.value )
     {
         case NetplayState::PreInitial:
@@ -804,7 +805,6 @@ uint16_t NetplayManager::getInput ( uint8_t player )
 
         case NetplayState::RetryMenu:
             return getRetryMenuInput ( player );
-
         case NetplayState::ReplayMenu:
             return getReplayMenuInput ( player );
 

@@ -49,6 +49,7 @@ uint16_t getPortFromSockAddr ( const sockaddr *sa )
         return ntohs ( ( ( sockaddr_in6 * ) sa )->sin6_port );
 }
 
+/*
 const char *inet_ntop ( int af, const void *src, char *dst, size_t size )
 {
     if ( af == AF_INET )
@@ -72,6 +73,7 @@ const char *inet_ntop ( int af, const void *src, char *dst, size_t size )
 
     return 0;
 }
+*/
 
 IpAddrPort::IpAddrPort ( const string& addrPort ) : addr ( addrPort ), port ( 0 ), isV4 ( true )
 {

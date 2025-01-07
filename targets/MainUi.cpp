@@ -485,15 +485,11 @@ void MainUi::spectate ( RunFuncPtr run )
 {
 
     _ui->pushRight ( new ConsoleUi::Menu ( "Mode", { "Netplay", "Broadcast" }, "Cancel" ) );
-    //_ui->top<ConsoleUi::Menu>()->setPosition ( _config.getInteger ( "lastSpectateMenuPosition" ) - 1 );
-
+    
     int isBroadcast = _ui->popUntilUserInput ( true )->resultInt; 
-
-    log("went with %d", isBroadcast);
 
     _ui->pop();
 
-    //_config.setInteger ( "lastSpectateMenuPosition", isBroadcast + 1 );
     saveConfig();
 
     ConsoleUi::Prompt *menu = new ConsoleUi::Prompt ( ConsoleUi::Prompt::String,
@@ -528,21 +524,13 @@ void MainUi::spectate ( RunFuncPtr run )
             continue;
         }
 
-        log("setting mode to netplay omfg");
-
         initialConfig.mode.value = ClientMode::SpectateNetplay; // is this the issue?
         if(isBroadcast) {
             initialConfig.mode.value = ClientMode::SpectateBroadcast;
         }
-        //initialConfig.mode.value = ClientMode::SpectateBroadcast; 
-        //initialConfig.mode.value = mainMenu->clientMode;
-
-        //RUN ( _address, initialConfig );
-        ControllerManager::get().deinitialize();                                                        
-        run ( _address, initialConfig );                                                                    
-        ControllerManager::get().loadMappings ( ProcessManager::appDir + FOLDER, MAPPINGS_EXT );        
-        ControllerManager::get().initialize ( this );                                                   
-
+    
+        RUN ( _address, initialConfig );
+    
         _ui->popNonUserInput();
 
         if ( ! sessionError.empty() )
@@ -1920,7 +1908,6 @@ void MainUi::spectate ( const SpectateConfig& spectateConfig )
 
     if ( spectateConfig.mode.isBroadcast() )
     {
-        log("wowee spectating a broadcast spec!");
         initialConfig.mode.value = ClientMode::SpectateBroadcast;
         text = format ( "Spectating a %s mode broadcast (0 delay)\n\n",
                         ( spectateConfig.mode.isTraining() ? "training" : "versus" ) );
@@ -1928,7 +1915,6 @@ void MainUi::spectate ( const SpectateConfig& spectateConfig )
     }
     else
     {
-        log("wowee spectating a netplay spec!");
         initialConfig.mode.value = ClientMode::SpectateNetplay;
         text = format ( "Spectating %s mode (%u delay%s)\n\n",
                         ( spectateConfig.mode.isTraining() ? "training" : "versus" ), spectateConfig.delay,

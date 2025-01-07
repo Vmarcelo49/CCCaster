@@ -9,6 +9,8 @@
 
 #include <vector>
 #include <array>
+#include <string>
+
 /*
 TODO: Delete?
 ENUM ( TrialMenu, None,
@@ -61,6 +63,11 @@ public:
     virtual void saveMappings ( const Controller *controller ) const = 0;
 
     bool framestepEnabled;
+
+    std::string remoteIP = "N/A";
+    std::vector<std::string> localIP = {"N/A"};
+    std::string port = "N/A";
+    bool displayIPs = false;
 
 private:
 

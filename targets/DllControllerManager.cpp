@@ -945,6 +945,14 @@ void DllControllerManager::handleMappingOverlay()
         }
     }
 
+    if(displayIPs) {
+        text[1] += "\n";
+        text[1] += "\nPublic: " + remoteIP + ":" + port;
+        for(const auto& s : localIP) {
+            text[1] += "\nPrivate: " + s + ":" + port;
+        }
+    }
+
     DllOverlayUi::updateText ( text );
 
     // Enable Escape to exit if neither controller is being mapped

@@ -400,17 +400,13 @@ struct MainApp
             return;
         }
 
-        //log("at weird code");
-
         // Switch to spectate mode if the game is already started
         if ( clientMode.isClient() && versionConfig.mode.isGameStarted() ) {
-            //log("swithing to netplay spec");
             clientMode.value = ClientMode::SpectateNetplay;
         }
 
         // Update spectate type
         if ( clientMode.isSpectate() && versionConfig.mode.isBroadcast() ) {
-            //log("swithing to broadcast spec");
             clientMode.value = ClientMode::SpectateBroadcast;
         }
 

@@ -1,6 +1,10 @@
 #include "ExternalIpAddress.hpp"
 #include "Logger.hpp"
 
+#include <ws2tcpip.h>
+#include <winsock2.h>
+#include <wininet.h>
+
 #include <vector>
 
 using namespace std;
@@ -76,3 +80,42 @@ void ExternalIpAddress::stop()
 {
     _httpGet.reset();
 }
+
+std::vector<std::string> getInternalIpAddresses() {
+
+    // this is just a system call, i can do it here. above is not done this way, bc threading, http delay, me not wanting to cause a stall on melty start
+    WSADATA wsaData;
+    if (WSAStartup(MAKEWORD(2, 2), &wsaData) != 0) {
+        return std::vector<std::string>({"Failed to get Internal IP"});
+    }
+
+    char hostname[256];
+    if (gethostname(hostname, sizeof(hostname)) == SOCKET_ERROR) {
+        WSACleanup();
+        return std::vector<std::string>({"Failed to get Internal IP"});
+    }
+
+    addrinfo hints = {};
+    hints.ai_family = AF_INET; // IPv4
+    hints.ai_socktype = SOCK_STREAM;
+
+    addrinfo* addrResult = nullptr;
+    if (getaddrinfo(hostname, nullptr, &hints, &addrResult) != 0) {
+        WSACleanup();
+        return std::vector<std::string>({"Failed to get Internal IP"});
+    }
+
+    std::vector<std::string> res;
+    for (addrinfo* ptr = addrResult; ptr != nullptr; ptr = ptr->ai_next) {
+        sockaddr_in* sockaddr_ipv4 = reinterpret_cast<sockaddr_in*>(ptr->ai_addr);
+        char ipStr[INET_ADDRSTRLEN];
+        inet_ntop(AF_INET, &(sockaddr_ipv4->sin_addr), ipStr, sizeof(ipStr));
+        res.push_back(std::string(ipStr));
+    }
+
+    freeaddrinfo(addrResult);
+    WSACleanup();
+
+    return res;
+}
+
