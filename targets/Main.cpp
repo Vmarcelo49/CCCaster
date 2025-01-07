@@ -430,8 +430,10 @@ int main ( int argc, char *argv[] )
     ui.initialize();
     ui.initialConfig.mode.flags |= ( opt[Options::Training] && !opt[Options::Tournament] ? ClientMode::Training : 0 );
 
-    if ( opt[Options::Spectate] )
+    if ( opt[Options::Spectate] ) {
         ui.initialConfig.mode.value = ClientMode::SpectateNetplay;
+    }
+        
 
     if ( opt[Options::MaxDelay] )
     {
@@ -451,7 +453,7 @@ int main ( int argc, char *argv[] )
             ui.setDefaultRollback ( num );
     }
 
-    RunFuncPtr run = ( opt[Options::FakeUi] ? runFake : runMain );
+    RunFuncPtr run = ( opt[Options::FakeUi] ? runFake : runMain ); // why did passing a funcptr through 3 funcs seem like the ideal way??
 
     // Warn on invalid command line opt
     for ( Option *it = opt[Options::Unknown]; it; it = it->next() )
@@ -556,6 +558,7 @@ int main ( int argc, char *argv[] )
 
         try
         {
+            log("actually running ui.main(run)");
             ui.main ( run );
         }
         catch ( const Exception& exc )

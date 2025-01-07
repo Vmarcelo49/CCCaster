@@ -7,6 +7,9 @@
 #include <vector>
 #include <climits>
 
+void __stdcall ___log(const char* msg);
+
+void __stdcall log(const char* format, ...);
 
 // Class that manages netplay state and inputs
 class NetplayManager
@@ -234,3 +237,56 @@ private:
 };
 
 extern NetplayManager* netManPtr;
+
+
+inline const char* getStateString(NetplayState state) {
+
+    const char* stateString = "IDEK";
+    
+    switch(state.value ) {
+    case NetplayState::PreInitial:
+        stateString = "PreInit";
+        break;
+
+    case NetplayState::Initial:
+        stateString = "Initial";
+        break;
+
+    case NetplayState::AutoCharaSelect:
+        stateString = "AutoCharaSelect";
+        break;
+
+    case NetplayState::CharaSelect:
+        stateString = "CharaSelect";
+        break;
+
+    case NetplayState::Loading:
+         stateString = "Loading";
+        break;
+    case NetplayState::CharaIntro:
+      stateString = "CharaIntro";
+        break;
+    case NetplayState::Skippable:
+        stateString = "Skippable";
+        break;
+
+    case NetplayState::InGame:
+        stateString = "InGame";
+        break;
+
+    case NetplayState::RetryMenu:
+        stateString = "RetryMenu";
+        break;
+
+    case NetplayState::ReplayMenu:
+        stateString = "ReplayMenu";
+        break;
+
+    default:
+        ASSERT_IMPOSSIBLE;
+        break;
+    }
+
+    return stateString;
+
+}

@@ -994,6 +994,9 @@ struct DllMain
 
     void netplayStateChanged ( NetplayState state )
     {
+
+        //log("\tnetplayStateChanged to %s", getStateString(state));
+
         // Catch invalid transitions
         if ( ! netMan.isValidNext ( state ) )
         {
@@ -1107,6 +1110,12 @@ struct DllMain
 
     void gameModeChanged ( uint32_t previous, uint32_t current )
     {
+
+        //log("prev: %5d curr: %5d", previous, current);
+        // prev:     5 curr:     8  seems to be what does the thing?
+        // manually changing 0x54EEE8 to 8 causes this thing to change it back to 5
+        // on a normal A press, 00000410 is written
+
         if ( current == 0
                 || current == CC_GAME_MODE_STARTUP
                 || current == CC_GAME_MODE_OPENING
@@ -1519,6 +1528,7 @@ struct DllMain
                         return;
 
                     case MsgType::MenuIndex:
+                        //log("MENUINDEX WAS GOT AND GOT SET?!?");
                         netMan.setRetryMenuIndex ( msg->getAs<MenuIndex>().index, msg->getAs<MenuIndex>().menuIndex );
                         return;
 
