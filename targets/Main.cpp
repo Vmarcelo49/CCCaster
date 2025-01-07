@@ -558,7 +558,6 @@ int main ( int argc, char *argv[] )
 
         try
         {
-            log("actually running ui.main(run)");
             ui.main ( run );
         }
         catch ( const Exception& exc )

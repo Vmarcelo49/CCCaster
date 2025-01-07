@@ -682,12 +682,10 @@ struct MainApp
                 break;
 
             case ClientMode::SpectateNetplay:
-                log("omfg SpectateNetplay");
                 ui.initialConfig.mode.value = ClientMode::SpectateNetplay;
                 userConfirmed = ui.confirm ( "Continue?" );
                 break;
             case ClientMode::SpectateBroadcast:
-                log("omfg SpectateBroadcast");
                 ui.initialConfig.mode.value = ClientMode::SpectateBroadcast;
                 userConfirmed = ui.confirm ( "Continue?" );
                 break;

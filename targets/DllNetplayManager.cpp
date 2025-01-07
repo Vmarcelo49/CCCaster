@@ -353,17 +353,6 @@ uint16_t NetplayManager::getReplayMenuInput ( uint8_t player )
 
 uint16_t NetplayManager::getRetryMenuInput ( uint8_t player )
 {
-
-    //log("net: %d broad: %d isNet: %d isBroad: %d ", config.mode.isSpectateNetplay(), config.mode.isSpectateBroadcast(), config.mode.isNetplay(), config.mode.isBroadcast());
-
-    //log("_remoteRetryMenuIndex: %d _localRetryMenuIndex: %d _targetMenuIndex: %d isOffline: %d", _remoteRetryMenuIndex, _localRetryMenuIndex, _targetMenuIndex, config.mode.isOffline());
-
-    if ( ! config.mode.isSpectate() )  {
-        //log("currentMenuIndex: %d, _remoteRetryMenuIndex: %d _localRetryMenuIndex: %d _targetMenuIndex: %d", AsmHacks::currentMenuIndex, _remoteRetryMenuIndex, _localRetryMenuIndex, _targetMenuIndex);        
-    }
-   
-
-
     // Ignore remote input on netplay
     if ( player != _localPlayer && config.mode.isNetplay() )
         return 0;
@@ -374,14 +363,9 @@ uint16_t NetplayManager::getRetryMenuInput ( uint8_t player )
 
     uint16_t input;
 
-    #define __asmStart __asm__ __volatile__ (".intel_syntax noprefix;"); __asm__ __volatile__ (
-    #define __asmEnd ); __asm__ __volatile__ (".att_syntax;");
-    #define INT3 __asmStart R"( int3; )" __asmEnd
-
     if ( config.mode.isSpectate() ) 
     {
         input = ( ( getFrame() % 2 ) ? 0 : COMBINE_INPUT ( 0, (CC_BUTTON_A | CC_BUTTON_CONFIRM) ) );
-        //input = ( ( getFrame() % 2 ) ? 0 : 0x4100 );
     }
     else
     {
@@ -483,8 +467,6 @@ uint16_t NetplayManager::getRetryMenuInput ( uint8_t player )
     }
     else if( config.mode.isBroadcast() )
     {
-        // got no clue what the range is for _targetMenuIndex
-        // TODO, wait for selection??? wheres the fucking code which does that???
 
         if(AsmHacks::menuConfirmState == 1) { // reading the code explains the code, check dllasmhaacks
             setRetryMenuIndex ( getIndex(), AsmHacks::currentMenuIndex );
@@ -686,8 +668,6 @@ uint32_t NetplayManager::getBufferedPreserveStartIndex() const
 void NetplayManager::setState ( NetplayState state )
 {
 
-    //log("\t\tsetState called %s", getStateString(state));
-  
     if ( ! isValidNext ( state ) )
     {
         LOG ( "Invalid transition: %s -> %s", _state, state );
@@ -791,7 +771,6 @@ void NetplayManager::setState ( NetplayState state )
 uint16_t NetplayManager::getInput ( uint8_t player )
 {
     ASSERT ( player == 1 || player == 2 );
-    
     switch ( _state.value )
     {
         case NetplayState::PreInitial:
