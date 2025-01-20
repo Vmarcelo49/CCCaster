@@ -430,8 +430,10 @@ int main ( int argc, char *argv[] )
     ui.initialize();
     ui.initialConfig.mode.flags |= ( opt[Options::Training] && !opt[Options::Tournament] ? ClientMode::Training : 0 );
 
-    if ( opt[Options::Spectate] )
+    if ( opt[Options::Spectate] ) {
         ui.initialConfig.mode.value = ClientMode::SpectateNetplay;
+    }
+        
 
     if ( opt[Options::MaxDelay] )
     {

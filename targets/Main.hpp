@@ -12,6 +12,10 @@
 
 #include <unordered_set>
 
+void __stdcall ___log(const char* msg);
+
+void __stdcall log(const char* format, ...);
+
 
 // Log file that contains all the data needed to keep games in sync
 #define SYNC_LOG_FILE FOLDER "sync.log"

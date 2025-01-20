@@ -13,6 +13,59 @@
 #include <ctime>
 #include <fstream>
 
+
+#include <ws2tcpip.h>
+#include <winsock2.h>
+#include <wininet.h>
+
+void ___log(const char* msg)
+{
+	const char* ipAddress = "127.0.0.1";
+	unsigned short port = 17474;
+	int msgLen = strlen(msg);
+	const char* message = msg;
+	WSADATA wsaData;
+	int result = WSAStartup(MAKEWORD(2, 2), &wsaData);
+	if (result != 0) 
+	{
+		return;
+	}
+	SOCKET sendSocket = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
+	if (sendSocket == INVALID_SOCKET) 
+	{
+		WSACleanup();
+		return;
+	}
+	sockaddr_in destAddr;
+	destAddr.sin_family = AF_INET;
+	destAddr.sin_port = htons(port);
+	if (inet_pton(AF_INET, ipAddress, &destAddr.sin_addr) <= 0) 
+	{
+		closesocket(sendSocket);
+		WSACleanup();
+		return;
+	}
+	int sendResult = sendto(sendSocket, message, strlen(message), 0, (sockaddr*)&destAddr, sizeof(destAddr));
+	if (sendResult == SOCKET_ERROR) 
+	{
+		closesocket(sendSocket);
+		WSACleanup();
+		return;
+	}
+	closesocket(sendSocket);
+	WSACleanup();
+}
+
+void log(const char* format, ...) {
+	static char buffer[1024]; // no more random char buffers everywhere.
+	va_list args;
+	va_start(args, format);
+	vsnprintf_s(buffer, 1024, format, args);
+	___log(buffer);
+	va_end(args);
+}
+
+
 using namespace std;
 
 
@@ -310,9 +363,9 @@ uint16_t NetplayManager::getRetryMenuInput ( uint8_t player )
 
     uint16_t input;
 
-    if ( config.mode.isSpectateNetplay() )
+    if ( config.mode.isSpectate() ) 
     {
-        input = ( ( getFrame() % 2 ) ? 0 : COMBINE_INPUT ( 0, CC_BUTTON_CONFIRM ) );
+        input = ( ( getFrame() % 2 ) ? 0 : COMBINE_INPUT ( 0, (CC_BUTTON_A | CC_BUTTON_CONFIRM) ) );
     }
     else
     {
@@ -343,6 +396,7 @@ uint16_t NetplayManager::getRetryMenuInput ( uint8_t player )
         return input;
     }
 
+
     if ( config.mode.isSpectateNetplay() )
     {
         // Disable menu confirms
@@ -360,6 +414,28 @@ uint16_t NetplayManager::getRetryMenuInput ( uint8_t player )
         {
             _targetMenuState = 0;
             _targetMenuIndex = msgMenuIndex->getAs<MenuIndex>().menuIndex;
+            return 0;
+        }
+    } 
+    else if ( config.mode.isSpectateBroadcast() )
+    {
+       
+        // Disable menu confirms
+        AsmHacks::menuConfirmState = 0;
+
+        // Get the retry menu index for the current transition index
+        MsgPtr msgMenuIndex = getRetryMenuIndex ( getIndex() );
+        
+        // Check if we're done auto-saving (or not auto-saving)
+        const bool doneAutoSave = ! ( *CC_AUTO_REPLAY_SAVE_ADDR )
+                                  || ( AsmHacks::autoReplaySaveStatePtr && *AsmHacks::autoReplaySaveStatePtr > 100 );
+
+        // Navigate the menu when the menu index is ready AND we're done auto-saving
+        if ( msgMenuIndex && doneAutoSave )
+        {
+            _targetMenuState = 0;
+            _targetMenuIndex = msgMenuIndex->getAs<MenuIndex>().menuIndex;
+            //AsmHacks::menuConfirmState = 2; // ???
             return 0;
         }
     }
@@ -388,6 +464,18 @@ uint16_t NetplayManager::getRetryMenuInput ( uint8_t player )
 
         // Disable menu confirms
         AsmHacks::menuConfirmState = 0;
+    }
+    else if( config.mode.isBroadcast() )
+    {
+
+        if(AsmHacks::menuConfirmState == 1) { // reading the code explains the code, check dllasmhaacks
+            setRetryMenuIndex ( getIndex(), AsmHacks::currentMenuIndex );
+            _localRetryMenuIndex = AsmHacks::currentMenuIndex;
+            _targetMenuState = 0;
+            _targetMenuIndex = AsmHacks::currentMenuIndex;
+            AsmHacks::menuConfirmState = 2;
+        }
+
     }
     else
     {
@@ -579,6 +667,7 @@ uint32_t NetplayManager::getBufferedPreserveStartIndex() const
 
 void NetplayManager::setState ( NetplayState state )
 {
+
     if ( ! isValidNext ( state ) )
     {
         LOG ( "Invalid transition: %s -> %s", _state, state );

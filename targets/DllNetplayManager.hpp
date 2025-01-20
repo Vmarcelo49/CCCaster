@@ -7,6 +7,9 @@
 #include <vector>
 #include <climits>
 
+void __stdcall ___log(const char* msg);
+
+void __stdcall log(const char* format, ...);
 
 // Class that manages netplay state and inputs
 class NetplayManager
@@ -234,3 +237,4 @@ private:
 };
 
 extern NetplayManager* netManPtr;
+

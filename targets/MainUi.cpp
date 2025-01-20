@@ -483,6 +483,15 @@ void MainUi::matchmaking( RunFuncPtr run )
 
 void MainUi::spectate ( RunFuncPtr run )
 {
+
+    _ui->pushRight ( new ConsoleUi::Menu ( "Mode", { "Netplay", "Broadcast" }, "Cancel" ) );
+    
+    int isBroadcast = _ui->popUntilUserInput ( true )->resultInt; 
+
+    _ui->pop();
+
+    saveConfig();
+
     ConsoleUi::Prompt *menu = new ConsoleUi::Prompt ( ConsoleUi::Prompt::String,
             "Enter/paste <ip>:<port> to spectate:" );
 
@@ -515,10 +524,13 @@ void MainUi::spectate ( RunFuncPtr run )
             continue;
         }
 
-        initialConfig.mode.value = ClientMode::SpectateNetplay;
-
+        initialConfig.mode.value = ClientMode::SpectateNetplay; // is this the issue?
+        if(isBroadcast) {
+            initialConfig.mode.value = ClientMode::SpectateBroadcast;
+        }
+    
         RUN ( _address, initialConfig );
-
+    
         _ui->popNonUserInput();
 
         if ( ! sessionError.empty() )
@@ -1896,11 +1908,14 @@ void MainUi::spectate ( const SpectateConfig& spectateConfig )
 
     if ( spectateConfig.mode.isBroadcast() )
     {
+        initialConfig.mode.value = ClientMode::SpectateBroadcast;
         text = format ( "Spectating a %s mode broadcast (0 delay)\n\n",
                         ( spectateConfig.mode.isTraining() ? "training" : "versus" ) );
+
     }
     else
     {
+        initialConfig.mode.value = ClientMode::SpectateNetplay;
         text = format ( "Spectating %s mode (%u delay%s)\n\n",
                         ( spectateConfig.mode.isTraining() ? "training" : "versus" ), spectateConfig.delay,
                         ( spectateConfig.rollback ? format ( ", %u rollback", spectateConfig.rollback ) : "" ) );

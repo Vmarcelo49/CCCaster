@@ -3,6 +3,7 @@
 #include "HttpGet.hpp"
 
 #include <string>
+#include <vector>
 #include <memory>
 
 
@@ -42,3 +43,6 @@ private:
 
     void httpProgress ( HttpGet *httpGet, uint32_t receivedBytes, uint32_t totalBytes ) override {}
 };
+
+std::vector<std::string> getInternalIpAddresses();
+
