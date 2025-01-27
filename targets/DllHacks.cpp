@@ -52,6 +52,9 @@ void initializePreLoad()
     for ( const Asm& hack : addExtraTextures )
         WRITE_ASM_HACK ( hack );
 
+    for ( const Asm& hack : loadCustomPalettesAsm )
+        WRITE_ASM_HACK ( hack );
+
     WRITE_ASM_HACK ( multiWindow );
     WRITE_ASM_HACK ( detectAutoReplaySave );
     WRITE_ASM_HACK ( hijackEscapeKey );
