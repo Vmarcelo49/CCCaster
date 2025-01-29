@@ -10,6 +10,13 @@
 #include <fstream>
 #include <vector>
 #include <iterator>
+#include <array>
+#include <map>
+#include <atomic>
+#include <regex>
+#include <optional>
+#include <filesystem>
+namespace fs = std::filesystem;
 
 using namespace std;
 
@@ -223,5 +230,358 @@ int Asm::revert() const
 {
     return memwrite ( addr, &backup[0], backup.size() );
 }
+
+// ----- all of this really should be moved to a different file.
+
+#define swap32(v) __builtin_bswap32(v)
+
+std::map<int, std::map<int, std::array<DWORD, 256>>> palettes;
+
+typedef std::array<DWORD, 256> Palette;
+
+int getIndexFromCharName(const std::string& name) {
+
+    std::map<std::string, int> lookup = {
+        {"SION",0},
+        {"ARC",1},
+        {"CIEL",2},
+        {"AKIHA",3},
+        
+        {"HISUI",5},
+
+        {"KOHAKU",6},
+        {"KOHAKU_M",6},
+
+        {"SHIKI",7},
+        {"MIYAKO",8},
+        {"WARAKIA",9},
+        {"NERO",10},
+        {"V_SION",11},
+        {"WARC",12},
+        {"AKAAKIHA",13},
+        
+        {"M_HISUI",14},
+        {"M_HISUI_P",14},
+        {"M_HISUI_M",14},
+
+        {"NANAYA",15},
+        {"SATSUKI",17},
+        {"LEN",18},
+        {"P_CIEL",19},
+        
+        {"NECO",20},
+        {"NECO_P",20},
+
+        {"AOKO",22},
+        {"WLEN",23},
+        {"NECHAOS",25},
+        {"KISHIMA",28},
+        {"S_AKIHA",29},
+        {"RIES",30},
+        {"ROA",31},
+        {"RYOUGI",33},
+        {"P_ARC",51},
+        {"P_ARC_D",-1}, // i remember having some issues with P_ARC_D,, not doing it
+    };
+
+    if(!lookup.contains(name)) {
+        log("couldnt find \"%s\"", name.c_str());
+        return -1; 
+    }
+
+    return lookup[name];
+}
+
+class PNGChunk {
+public:
+
+	// watch out! values are in big endian!!
+
+	PNGChunk(BYTE* PNGChunkStart) {
+		len = (DWORD*)(PNGChunkStart + 0x0);
+		PNGChunkType = (DWORD*)(PNGChunkStart + 0x4);
+		data = (BYTE*)(PNGChunkStart + 0x8);
+
+		DWORD tempLen = *len;
+		tempLen = swap32(tempLen);
+		crc = (DWORD*)(PNGChunkStart + 0x8 + tempLen);
+	}
+
+	PNGChunk getNextPNGChunk() {
+		return PNGChunk((BYTE*)(crc) + 4);
+	}
+
+	void display() {
+
+		char tempBuffer[5];
+		memcpy(&tempBuffer, PNGChunkType, 4);
+		tempBuffer[4] = 0;
+
+		printf("PNGChunk len: %08X name: %s\n", swap32(*len), tempBuffer);
+
+		if(strncmp(tempBuffer, "IHDR", 4) == 0) {
+			printf("\t(%d, %d) d:%d type:%d\n", swap32(*(DWORD*)(data + 0x0)), swap32(*(DWORD*)(data + 0x4)), *(BYTE*)(data + 0x8), *(BYTE*)(data + 0x9));
+		}
+	}
+
+	bool isIndexed() {
+		if(strncmp((char*)PNGChunkType, "IHDR", 4) == 0) {
+			return *(BYTE*)(data + 0x9) == 3;
+		}
+		return false;
+	}
+
+	std::optional<Palette> getPalette() {
+		
+		int bpp = 8; // this is an assumption.
+
+		std::optional<Palette> res;
+
+		if(strncmp((char*)PNGChunkType, "PLTE", 4) != 0) {
+			return res;
+		}
+
+		Palette tempRes;
+		for(int i=0; i<256; i++) {
+			BYTE r = data[(i * 3) + 0];
+			BYTE g = data[(i * 3) + 1];
+			BYTE b = data[(i * 3) + 2];
+			tempRes[i] = 0x01000000 | (b << 16) | (g << 8) | (r << 0); // if i remember correctly, melty uses ABGR
+		}
+
+		res = tempRes;
+
+		return res;
+	}
+
+	bool isValid() {
+		if(len == NULL || *len == 0) {
+			return false;
+		}
+		return true;
+	}
+
+	DWORD* len = NULL;
+	DWORD* PNGChunkType = NULL;
+	BYTE* data = NULL;
+	DWORD* crc = NULL;
+
+};
+
+std::vector<std::string> getPaletteFiles(const std::string& inputPath) {
+
+	std::vector<std::string> res;
+	
+	std::regex re(R"((.+\.png)$)", std::regex::icase); 
+
+    for (const auto & entry : fs::directory_iterator(inputPath)) {
+		std::string p = entry.path().string();
+        if(std::regex_match(p, re)) {
+			res.push_back(p);
+		}
+	}
+
+	return res;
+}
+
+std::optional<Palette> getPalette(const std::string& filePath) {
+
+	// read https://en.wikipedia.org/wiki/PNG
+
+	std::optional<Palette> res;
+
+	std::ifstream file(filePath, std::ios::binary | std::ios::ate);
+	if (!file.good()) {
+		printf("couldnt find %s\n", filePath.c_str());
+		return res;
+	}
+
+	int bufferSize = file.tellg();
+	file.seekg(0, std::ios::beg);
+
+	BYTE* buffer = (BYTE*)malloc(bufferSize);
+
+	file.read((char*)buffer, bufferSize);
+
+	if(strncmp((char*)buffer + 1, "PNG", 3) != 0) {
+		printf("%s wasnt a png!\n", filePath.c_str());
+		free(buffer);
+		return res;
+	}
+
+	bool isIndexed = false; // checks IHDR 3
+	int bpp = -1;
+
+	PNGChunk PNGChunk(buffer + 0x8);
+	while(PNGChunk.isValid()) {
+		PNGChunk.display();
+		std::optional<Palette> optPal = PNGChunk.getPalette();
+		if(isIndexed && optPal.has_value()) {
+			printf("\tgot palette!\n");
+			res = optPal.value();
+		}
+		isIndexed |= PNGChunk.isIndexed();
+		PNGChunk = PNGChunk.getNextPNGChunk();
+	}
+
+	if(res.has_value()) {
+		printf("\treturning palette\n");
+	} 
+	
+	free(buffer);
+
+	return res;
+}
+
+void loadCustomPalettes() {
+
+    static std::atomic<bool> loaded = false; // 0: unloaded, 1: loading, 2: loaded
+
+    if(loaded) {
+        return;
+    }
+
+    loaded = true;
+
+    std::string pathString = "./cccaster/palettes/";
+    fs::path dirPath(pathString);
+    
+    if (!fs::exists(dirPath)) {
+        // create folder and instructions
+        fs::create_directory(dirPath);
+        
+        std::ofstream outFile(pathString + "instructions.txt");
+
+        std::string instructions = R"(
+Instructions:
+
+putting palettes in here will automatically load them into melty
+
+please put PNG files from palmod in here, and give them the following naming scheme
+    [characterID]_[paletteNum].png
+
+example, for warc color 27 would be
+    12_27.png
+
+list of character IDs:
+
+SION      0
+ARC       1
+CIEL      2
+AKIHA     3
+HISUI     5
+KOHAKU    6
+SHIKI     7
+MIYAKO    8
+WARAKIA   9
+NERO     10
+V_SION   11
+WARC     12
+VAKIHA   13
+M_HISUI  14
+NANAYA   15
+SATSUKI  17
+LEN      18
+P_CIEL   19
+NECO     20
+AOKO     22
+WLEN     23
+NECHAOS  25
+KISHIMA  28
+S_AKIHA  29
+RIES     30
+ROA      31
+RYOUGI   33
+HIME     51
+)";
+
+        outFile << instructions;
+
+        outFile.close();
+    }
+    
+    std::vector<std::string> paletteList = getPaletteFiles(pathString);
+
+	for(const std::string& filePath : paletteList) {
+		std::optional<Palette> tempPalette = getPalette(filePath);
+		
+        std::regex pattern(R"((\d+)_([\d]+)\.png)");
+        std::smatch matches;
+
+        std::string filename = filePath.substr(filePath.find_last_of("/\\") + 1);
+
+        if(tempPalette.has_value() && std::regex_match(filename, matches, pattern)) {
+            
+            int charID = std::stoi(matches[1]);
+            int palNum = std::stoi(matches[2]);
+
+            if(!palettes.contains(charID)) {
+                palettes.insert({charID,  std::map<int, std::array<DWORD, 256>>()});
+            }
+
+            log("adding palette %s %d %d", filePath.c_str(), charID, palNum);
+            palettes[charID].insert({palNum, tempPalette.value()});
+		}
+	}
+}
+
+void palettePatcher(DWORD EAX, DWORD EBX) {
+
+    loadCustomPalettes();
+
+    // can this func be called in different threads?
+
+    if(EBX == 0) {
+        return;
+    }
+
+    char ebxBuffer[256];
+    strncpy(ebxBuffer, (char*)EBX, 256);
+
+    std::string ebx(ebxBuffer);
+    if(ebx.substr(MAX(0, ebx.size() - 4)) != ".pal") {
+        return;
+    }
+
+    size_t lastBackslash = ebx.find_last_of('\\');
+    if(lastBackslash == std::string::npos) {
+        return;
+    }
+    std::string charName = ebx.substr(lastBackslash+1, ebx.size() - (lastBackslash+1) - 4);
+
+    int charIndex = getIndexFromCharName(charName);
+    
+    if(charIndex == -1) {
+        return;
+    }
+
+    DWORD* colors = (DWORD*)(EAX + 4); // the first dword is the array size
+
+    if(palettes.contains(charIndex)) {
+        for(auto it = palettes[charIndex].begin(); it != palettes[charIndex].end(); ++it) {
+            if(it->first >= 1 && it->first <= 36) {
+                memcpy(&colors[256 * (it->first - 1)], (it->second).data(), sizeof(DWORD) * 256); 
+            }
+        }
+    }
+}
+
+void _naked_paletteCallback() {
+
+    // patched at 0x0041f87a
+
+    PUSH_ALL;
+    __asmStart R"(
+        push ebx;
+        push eax;
+        call _palettePatcher;
+        add esp, 0x8;
+    )" __asmEnd
+    POP_ALL;
+
+    ASMRET;
+}
+
+// -----
 
 } // namespace AsmHacks
