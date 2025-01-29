@@ -6,7 +6,71 @@
 
 #include <vector>
 #include <array>
+#include <windows.h>
+#include <map>
 
+#define packedStruct typedef struct __attribute__((packed))
+
+#define __asmStart __asm__ __volatile__ (".intel_syntax noprefix;"); __asm__ __volatile__ (
+#define __asmEnd ); __asm__ __volatile__ (".att_syntax;");
+
+#define MIN(a,b) (((a)<(b))?(a):(b))
+#define MAX(a,b) (((a)>(b))?(a):(b))
+#define CLAMP(value, min_val, max_val) MAX(MIN((value), (max_val)), (min_val))
+#define PUSH_ALL \
+    __asm__ __volatile__( \
+        "push %esp;"  \
+        "push %ebp;"  \
+        "push %edi;"  \
+        "push %esi;"  \
+        "push %edx;"  \
+        "push %ecx;"  \
+        "push %ebx;"  \
+        "push %eax;"  \
+        "push %ebp;"  \
+        "mov %esp, %ebp;" \
+    )
+#define POP_ALL \
+    __asm__ __volatile__( \
+       "pop %ebp;" \
+       "pop %eax;" \
+       "pop %ebx;" \
+       "pop %ecx;" \
+       "pop %edx;" \
+       "pop %esi;" \
+       "pop %edi;" \
+       "pop %ebp;" \
+       "pop %esp;" \
+    )
+
+#define STRINGIFY(x) #x
+#define TO_STRING(x) STRINGIFY(x)
+#define LINE_STRING TO_STRING(__LINE__)
+
+#define CONCATENATE_DETAIL(x, y) x##y
+#define CONCATENATE(x, y) CONCATENATE_DETAIL(x, y)
+#define LINE_NAME "LINE" LINE_STRING
+
+// needing offset keyword here makes me sad. so much time wasted.
+#define emitCall(addr) \
+    __asmStart \
+    "push offset " LINE_NAME ";" \
+	"push " #addr ";" \
+    "ret;" \
+    LINE_NAME ":" \
+    __asmEnd 
+
+#define emitJump(addr) \
+    __asmStart \
+	"push " #addr ";" \
+    "ret;" \
+    __asmEnd
+
+#define emitByte(b) asm __volatile__ (".byte " #b); 
+
+#define INT3 __asmStart R"( int3; )" __asmEnd
+
+#define ASMRET __asmStart R"( ret; )" __asmEnd
 
 #define WRITE_ASM_HACK(ASM_HACK)                                                                                    \
     do {                                                                                                            \
@@ -39,6 +103,15 @@
 
 #define INLINE_NOP_SEVEN_TIMES { 0x90, 0x90, 0x90, 0x90, 0x90, 0x90, 0x90 }
 
+#define PATCHJUMP_HELPER(patchAddr, newAddr) { (void*) patchAddr, { 0xE9, INLINE_DWORD( (newAddr) - ((patchAddr) + 5)) } } 
+
+#define PATCHCALL_HELPER(patchAddr, newAddr) { (void*) patchAddr, { 0xE8, INLINE_DWORD( (newAddr) - ((patchAddr) + 5)) } } 
+
+#define PATCHJUMP(patchAddr, newAddr) PATCHJUMP_HELPER(((unsigned)patchAddr), ((unsigned)newAddr))
+
+#define PATCHCALL(patchAddr, newAddr) PATCHCALL_HELPER(((unsigned)patchAddr), ((unsigned)newAddr))
+
+#define DISABLECALL(patchAddr) { ( void *) (patchAddr), INLINE_NOP_FIVE_TIMES }
 
 namespace AsmHacks
 {
@@ -505,5 +578,16 @@ static const AsmList addExtraTextures =
     } },
 };
 
+extern "C" {
+    __attribute__((noinline, cdecl)) void loadCustomPalettes();
+    __attribute__((noinline, cdecl)) void palettePatcher(DWORD EAX, DWORD EBX);
+    __attribute__((naked, noinline)) void _naked_paletteCallback();
+}
+
+extern std::map<int, std::map<int, std::array<DWORD, 256>>> palettes;
+
+static const AsmList loadCustomPalettesAsm = {
+    PATCHJUMP(0x0041f87a, _naked_paletteCallback),
+};
 
 } // namespace AsmHacks
