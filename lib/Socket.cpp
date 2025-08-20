@@ -69,16 +69,18 @@ void Socket::init()
     WinException exc;
     shared_ptr<addrinfo> addrInfo;
 
-    // TODO proper binding of IPv6 interfaces
+    // Get global IP version preference
+    IpVersionPreference preference = getGlobalIpVersionPreference();
+    
     if ( isClient() && isUDP() )
     {
         // For client UDP sockets, bind to any available local port
-        addrInfo = getAddrInfo ( "", 0, true, true );
+        addrInfo = getAddrInfoWithPreference ( "", 0, preference, true );
     }
     else
     {
         // Otherwise bind to the given address and port
-        addrInfo = getAddrInfo ( address.addr, address.port, true, isServer() || isUDP() );
+        addrInfo = getAddrInfoWithPreference ( address.addr, address.port, preference, isServer() || isUDP() );
     }
 
     addrinfo *res = addrInfo.get();

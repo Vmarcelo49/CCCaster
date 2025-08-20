@@ -15,6 +15,15 @@ struct sockaddr;
 // IP address utility functions
 std::shared_ptr<addrinfo> getAddrInfo ( const std::string& addr, uint16_t port, bool isV4, bool passive = false );
 
+// Get addrinfo with IP version preference support
+enum class IpVersionPreference { IPv4Only, IPv6Only, DualStack };
+std::shared_ptr<addrinfo> getAddrInfoWithPreference ( const std::string& addr, uint16_t port, 
+                                                      IpVersionPreference preference, bool passive = false );
+
+// Global IP version preference setting
+void setGlobalIpVersionPreference(IpVersionPreference preference);
+IpVersionPreference getGlobalIpVersionPreference();
+
 std::string getAddrFromSockAddr ( const sockaddr *sa );
 
 uint16_t getPortFromSockAddr ( const sockaddr *sa );
@@ -73,7 +82,19 @@ public:
         if ( empty() )
             return "";
         std::stringstream ss;
-        ss << addr << ':' << port;
+        if ( !isV4 && port > 0 )
+        {
+            // IPv6 with port: [address]:port
+            ss << '[' << addr << ']' << ':' << port;
+        }
+        else
+        {
+            // IPv4 with port or IPv6 without port
+            if ( port > 0 )
+                ss << addr << ':' << port;
+            else
+                ss << addr;
+        }
         return ss.str();
     }
 
@@ -82,7 +103,19 @@ public:
         if ( empty() )
             return "";
         static char buffer[256];
-        std::snprintf ( buffer, sizeof ( buffer ), "%s:%u", addr.c_str(), port );
+        if ( !isV4 && port > 0 )
+        {
+            // IPv6 with port: [address]:port
+            std::snprintf ( buffer, sizeof ( buffer ), "[%s]:%u", addr.c_str(), port );
+        }
+        else
+        {
+            // IPv4 with port or IPv6 without port
+            if ( port > 0 )
+                std::snprintf ( buffer, sizeof ( buffer ), "%s:%u", addr.c_str(), port );
+            else
+                std::snprintf ( buffer, sizeof ( buffer ), "%s", addr.c_str() );
+        }
         return buffer;
     }
 

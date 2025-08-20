@@ -976,6 +976,7 @@ void MainUi::settings()
         "Held start button in versus",
         "Automatic Replay Save",
         "Matchmaking Region",
+        "IP Version Preference",
         "Trial Input Guide Settings",
         "Experimental Settings",
         "About",
@@ -1297,6 +1298,44 @@ void MainUi::settings()
             }
 
             case 11:
+            {
+                vector<string> ipVersions = { "IPv4 Only", "IPv6 Only", "Dual-stack (IPv4 + IPv6)" };
+                _ui->pushInFront ( new ConsoleUi::Menu ( "Select IP Version Preference",
+                                                         ipVersions, "Cancel" ),
+                                   { 0, 0 }, true ); // Don't expand but DO clear top
+
+                string configIpVersion = _config.getString ( "ipVersionPreference" );
+                int ipVersionPos = 0;
+                if ( configIpVersion == "IPv6" ) {
+                    ipVersionPos = 1;
+                } else if ( configIpVersion == "DualStack" ) {
+                    ipVersionPos = 2;
+                } else {
+                    ipVersionPos = 0; // Default to IPv4
+                }
+
+                _ui->top<ConsoleUi::Menu>()->setPosition ( ipVersionPos );
+                _ui->popUntilUserInput();
+
+                if ( _ui->top()->resultInt >= 0 && _ui->top()->resultInt < 3 )
+                {
+                    const vector<string> configValues = { "IPv4", "IPv6", "DualStack" };
+                    const vector<IpVersionPreference> prefValues = { 
+                        IpVersionPreference::IPv4Only, 
+                        IpVersionPreference::IPv6Only, 
+                        IpVersionPreference::DualStack 
+                    };
+                    
+                    _config.setString ( "ipVersionPreference", configValues[_ui->top()->resultInt] );
+                    setGlobalIpVersionPreference ( prefValues[_ui->top()->resultInt] );
+                    saveConfig();
+                }
+
+                _ui->pop();
+                break;
+            }
+
+            case 12:
                 _ui->pushInFront ( new ConsoleUi::Menu ( "Trial Input Guide Options",
                                                          { "Trial Audio Cue", "Trial Screen Flash Color" }, "Cancel" ),
                                    { 0, 0 }, true ); // Don't expand but DO clear top
@@ -1354,7 +1393,7 @@ void MainUi::settings()
                     }
                 }
                 break;
-            case 12:
+            case 13:
                 _ui->pushInFront ( new ConsoleUi::Menu ( "Experimental Options",
                                                          { "Disable Caster Frame Limiter" }, "Cancel" ),
                                    { 0, 0 }, true ); // Don't expand but DO clear top
@@ -1382,7 +1421,7 @@ void MainUi::settings()
                     }
                 }
                 break;
-            case 13:
+            case 14:
                 _ui->pushInFront ( new ConsoleUi::TextBox ( format ( "CCCaster %s%s\n\nRevision %s\n\nBuilt on %s\n\n"
                                    "Created by Madscientist\n\nPress any key to go back",
                                    LocalVersion.code,
@@ -1515,6 +1554,7 @@ void MainUi::initialize()
     _config.setInteger ( "autoReplaySave", 1 );
     _config.setInteger ( "frameLimiter", 0 );
     _config.setString ( "matchmakingRegion", "NA West" );
+    _config.setString ( "ipVersionPreference", "IPv4" );
     _config.setDouble ( "heldStartDuration", 1.5 );
     _config.setInteger ( "updateChannel", static_cast<int>(MainUpdater::Channel::Stable ) );
     _config.setInteger ( "trialScreenFlashColor", 0xff0000ff );
@@ -1528,6 +1568,15 @@ void MainUi::initialize()
     // Load and save main config (this creates the config file on the first time)
     loadConfig();
     saveConfig();
+
+    // Set global IP version preference from config
+    string ipVersionPref = _config.getString ( "ipVersionPreference" );
+    if ( ipVersionPref == "IPv6" )
+        setGlobalIpVersionPreference ( IpVersionPreference::IPv6Only );
+    else if ( ipVersionPref == "DualStack" )
+        setGlobalIpVersionPreference ( IpVersionPreference::DualStack );
+    else
+        setGlobalIpVersionPreference ( IpVersionPreference::IPv4Only );
 
     // Reset the initial config
     initialConfig.clear();
