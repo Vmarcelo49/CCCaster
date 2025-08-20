@@ -6,6 +6,8 @@
 
 #include <vector>
 #include <memory>
+#include <functional>
+#include <span>
 
 
 #define DEFAULT_CONNECT_TIMEOUT ( 5000 )
@@ -26,6 +28,52 @@ class SmartSocket;
 struct SocketShareData;
 
 typedef std::shared_ptr<Socket> SocketPtr;
+
+
+// Modern callback interface using std::function
+struct SocketCallbacks
+{
+    // Socket events
+    std::function<void()> onAccepted;
+    std::function<void()> onConnected;
+    std::function<void()> onDisconnected;
+    
+    // Message handling
+    std::function<void(const MsgPtr&, const IpAddrPort&)> onMessage;
+    std::function<void(std::span<const char>, const IpAddrPort&)> onRawData;
+    
+    // Default constructor
+    SocketCallbacks() = default;
+    
+    // Constructor with essential callbacks
+    SocketCallbacks(
+        std::function<void()> connected,
+        std::function<void(const MsgPtr&, const IpAddrPort&)> message)
+        : onConnected(std::move(connected))
+        , onMessage(std::move(message))
+    {}
+};
+
+
+// Modern socket owner that uses RAII
+class SocketOwner
+{
+public:
+    virtual ~SocketOwner() = default;
+    
+    // Set callbacks for socket events
+    void setCallbacks(const SocketCallbacks& callbacks) { callbacks_ = callbacks; }
+    void setCallbacks(SocketCallbacks&& callbacks) { callbacks_ = std::move(callbacks); }
+    
+    // Check if owner is still valid
+    bool isValid() const { return true; }
+    
+protected:
+    SocketCallbacks callbacks_;
+    
+    // Allow Socket to access callbacks
+    friend class Socket;
+};
 
 
 // Generic socket base class
@@ -58,8 +106,11 @@ public:
     // Connection state
     ENUM ( State, Listening, Connecting, Connected, Disconnected );
 
-    // Socket owner
+    // Socket owner (legacy interface)
     Owner *owner = 0;
+    
+    // Modern owner using weak_ptr for safety
+    std::weak_ptr<SocketOwner> modernOwner;
 
     // Socket address
     // For server sockets, only the port should be set to the locally bound port
@@ -69,8 +120,11 @@ public:
     // Socket protocol
     const Protocol protocol;
 
-    // Constructor
+    // Constructor (legacy interface)
     Socket ( Owner *owner, const IpAddrPort& address, Protocol protocol, bool isRaw );
+    
+    // Modern constructor with RAII
+    Socket ( std::shared_ptr<SocketOwner> owner, const IpAddrPort& address, Protocol protocol, bool isRaw );
 
     // Virtual destructor
     virtual ~Socket();
@@ -94,10 +148,17 @@ public:
     // Send raw bytes directly, a return value of false indicates socket is disconnected
     virtual bool send ( const char *buffer, size_t len );
     virtual bool send ( const char *buffer, size_t len, const IpAddrPort& address );
+    
+    // Modern span-based send methods for type safety
+    virtual bool send ( std::span<const char> data );
+    virtual bool send ( std::span<const char> data, const IpAddrPort& address );
 
     // Accept a new socket, should not be called without an socketAccepted.
     // Check socket implementation for specific behaviours.
     virtual SocketPtr accept ( Owner *owner ) = 0;
+    
+    // Modern accept with RAII
+    virtual SocketPtr accept ( std::shared_ptr<SocketOwner> owner ) = 0;
 
     // Get the data needed to share this socket with another process
     virtual MsgPtr share ( int processId );
@@ -130,6 +191,19 @@ public:
 
     // Create a socket from SocketShareData
     static SocketPtr shared ( Socket::Owner *owner, const SocketShareData& data );
+    
+    // Modern factory function for creating sockets with RAII
+    template<typename SocketType, typename... Args>
+    static std::shared_ptr<SocketType> create(std::shared_ptr<SocketOwner> owner, Args&&... args)
+    {
+        return std::make_shared<SocketType>(owner, std::forward<Args>(args)...);
+    }
+    
+    // Helper to check if modern owner is valid
+    bool hasValidOwner() const;
+    
+    // Helper to notify callbacks (for modern interface)
+    void notifyCallbacks();
 
     friend class SocketManager;
     friend class SmartSocket;
@@ -174,16 +248,22 @@ protected:
     // Consume bytes from the front of the buffer
     void consumeBuffer ( size_t bytes );
 
-    // TCP event callbacks
+    // TCP event callbacks (legacy)
     virtual void socketAccepted() {}
-    virtual void socketConnected() {}
-    virtual void socketDisconnected() {}
+    virtual void socketConnected();
+    virtual void socketDisconnected();
 
     // Read event callback, calls the function below if NOT isRaw
     virtual void socketRead();
 
     // Read protocol message callback, must be implemented, only called if NOT isRaw
     virtual void socketRead ( const MsgPtr& msg, const IpAddrPort& address ) = 0;
+    
+    // Notify modern callbacks if available
+    void notifyConnected();
+    void notifyDisconnected();
+    void notifyMessage(const MsgPtr& msg, const IpAddrPort& address);
+    void notifyRawData(std::span<const char> data, const IpAddrPort& address);
 
     // Initialize the socket fd with the provided address and protocol
     void init();

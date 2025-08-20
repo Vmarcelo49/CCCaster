@@ -12,9 +12,16 @@ public:
 
     // Listen for connections on the given port
     static SocketPtr listen ( Socket::Owner *owner, uint16_t port, bool isRaw = false );
+    
+    // Modern factory methods with RAII
+    static std::shared_ptr<TcpSocket> listen ( std::shared_ptr<SocketOwner> owner, uint16_t port, bool isRaw = false );
 
     // Connect to the given address and port
     static SocketPtr connect ( Socket::Owner *owner, const IpAddrPort& address,
+                               bool isRaw = false, uint64_t connectTimeout = DEFAULT_CONNECT_TIMEOUT );
+                               
+    // Modern connect with RAII
+    static std::shared_ptr<TcpSocket> connect ( std::shared_ptr<SocketOwner> owner, const IpAddrPort& address,
                                bool isRaw = false, uint64_t connectTimeout = DEFAULT_CONNECT_TIMEOUT );
 
     // Create a socket from SocketShareData
@@ -28,6 +35,9 @@ public:
 
     // Accept a new socket, HANGS if no socket to accept
     SocketPtr accept ( Socket::Owner *owner ) override;
+    
+    // Modern accept with RAII
+    SocketPtr accept ( std::shared_ptr<SocketOwner> owner ) override;
 
     // Send a protocol message, a return value of false indicates socket is disconnected
     bool send ( SerializableMessage *message, const IpAddrPort& address = NullAddress ) override;
@@ -52,12 +62,21 @@ private:
 
     // Construct a server socket
     TcpSocket ( Socket::Owner *owner, uint16_t port, bool isRaw );
+    
+    // Modern constructors with RAII
+    TcpSocket ( std::shared_ptr<SocketOwner> owner, uint16_t port, bool isRaw );
 
     // Construct a client socket
     TcpSocket ( Socket::Owner *owner, const IpAddrPort& address, bool isRaw, uint64_t connectTimeout );
+    
+    // Modern client constructor
+    TcpSocket ( std::shared_ptr<SocketOwner> owner, const IpAddrPort& address, bool isRaw, uint64_t connectTimeout );
 
     // Construct an accepted client socket
     TcpSocket ( Socket::Owner *owner, int fd, const IpAddrPort& address, bool isRaw );
+    
+    // Modern accepted socket constructor
+    TcpSocket ( std::shared_ptr<SocketOwner> owner, int fd, const IpAddrPort& address, bool isRaw );
 
     // Construct a socket from SocketShareData
     TcpSocket ( Socket::Owner *owner, const SocketShareData& data );
