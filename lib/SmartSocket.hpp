@@ -25,11 +25,19 @@ public:
     // Opens a regular server socket of the given protocol, but also listens for UDP tunnel connections.
     static SocketPtr listenTCP ( Owner *owner, uint16_t port );
     static SocketPtr listenUDP ( Owner *owner, uint16_t port );
+    
+    // Modern factory methods with RAII
+    static std::shared_ptr<SmartSocket> listenTCP ( std::shared_ptr<SocketOwner> owner, uint16_t port );
+    static std::shared_ptr<SmartSocket> listenUDP ( std::shared_ptr<SocketOwner> owner, uint16_t port );
 
     // Connect to the given address and port.
     // Tries to connect using the given protocol, with fallback to UDP tunnel.
     static SocketPtr connectTCP ( Owner *owner, const IpAddrPort& address, bool forceTunnel = false );
     static SocketPtr connectUDP ( Owner *owner, const IpAddrPort& address, bool forceTunnel = false );
+    
+    // Modern connect methods with RAII
+    static std::shared_ptr<SmartSocket> connectTCP ( std::shared_ptr<SocketOwner> owner, const IpAddrPort& address, bool forceTunnel = false );
+    static std::shared_ptr<SmartSocket> connectUDP ( std::shared_ptr<SocketOwner> owner, const IpAddrPort& address, bool forceTunnel = false );
 
     // Destructor
     ~SmartSocket() override;
@@ -39,6 +47,9 @@ public:
 
     // Accept a new socket
     SocketPtr accept ( Socket::Owner *owner ) override;
+    
+    // Modern accept with RAII
+    SocketPtr accept ( std::shared_ptr<SocketOwner> owner ) override;
 
     // If this client UDP socket is connected over the UDP tunnel
     bool isTunnel() const;
@@ -127,7 +138,13 @@ private:
 
     // Construct a server socket
     SmartSocket ( Owner *owner, uint16_t port, Socket::Protocol protocol );
+    
+    // Modern server constructor with RAII
+    SmartSocket ( std::shared_ptr<SocketOwner> owner, uint16_t port, Socket::Protocol protocol );
 
     // Construct a client socket
     SmartSocket ( Owner *owner, const IpAddrPort& address, Socket::Protocol protocol, bool forceTunnel );
+    
+    // Modern client constructor with RAII
+    SmartSocket ( std::shared_ptr<SocketOwner> owner, const IpAddrPort& address, Socket::Protocol protocol, bool forceTunnel );
 };

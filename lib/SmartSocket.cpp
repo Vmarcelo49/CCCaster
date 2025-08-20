@@ -170,7 +170,64 @@ SmartSocket::SmartSocket ( Owner *owner, uint16_t port, Socket::Protocol protoco
     _tunSocket = UdpSocket::listen ( this, 0 );
 }
 
+SmartSocket::SmartSocket ( std::shared_ptr<SocketOwner> owner, uint16_t port, Socket::Protocol protocol )
+    : Socket ( owner, IpAddrPort ( "", port ), Protocol::Smart, false )
+    , _isDirectTCP ( protocol == Protocol::TCP )
+{
+    ASSERT ( protocol != Protocol::Smart );
+
+    freeBuffer();
+
+    _state = State::Listening;
+
+    _vpsAddress = relayServers.cbegin();
+    _vpsSocket = TcpSocket::connect ( this, *_vpsAddress, true ); // Raw socket
+
+    try
+    {
+        // Listen for direct connections at the same time
+        if ( _isDirectTCP )
+            _directSocket = TcpSocket::listen ( this, port );
+        else
+            _directSocket = UdpSocket::listen ( this, port );
+
+        // Update address port
+        address.port = _directSocket->address.port;
+        address.invalidate();
+    }
+    catch ( ... )
+    {
+        LOG ( "Failed to bind directSocket to port %u", port );
+    }
+
+    _tunSocket = UdpSocket::listen ( this, 0 );
+}
+
 SmartSocket::SmartSocket ( Owner *owner, const IpAddrPort& address, Socket::Protocol protocol, bool forceTun )
+    : Socket ( owner, address, Protocol::Smart, false )
+    , _isDirectTCP ( protocol == Protocol::TCP )
+{
+    ASSERT ( protocol != Protocol::Smart );
+
+    freeBuffer();
+
+    _state = State::Connecting;
+
+    if ( forceTun )
+    {
+        _vpsAddress = relayServers.cbegin();
+        _vpsSocket = TcpSocket::connect ( this, *_vpsAddress, true );
+        return;
+    }
+
+    // Try to connect directly first
+    if ( _isDirectTCP )
+        _directSocket = TcpSocket::connect ( this, address );
+    else
+        _directSocket = UdpSocket::connect ( this, address );
+}
+
+SmartSocket::SmartSocket ( std::shared_ptr<SocketOwner> owner, const IpAddrPort& address, Socket::Protocol protocol, bool forceTun )
     : Socket ( owner, address, Protocol::Smart, false )
     , _isDirectTCP ( protocol == Protocol::TCP )
 {
@@ -520,9 +577,19 @@ SocketPtr SmartSocket::listenTCP ( Owner *owner, uint16_t port )
     return SocketPtr ( new SmartSocket ( owner, port, Socket::Protocol::TCP ) );
 }
 
+std::shared_ptr<SmartSocket> SmartSocket::listenTCP ( std::shared_ptr<SocketOwner> owner, uint16_t port )
+{
+    return std::make_shared<SmartSocket>( owner, port, Socket::Protocol::TCP );
+}
+
 SocketPtr SmartSocket::listenUDP ( Owner *owner, uint16_t port )
 {
     return SocketPtr ( new SmartSocket ( owner, port, Socket::Protocol::UDP ) );
+}
+
+std::shared_ptr<SmartSocket> SmartSocket::listenUDP ( std::shared_ptr<SocketOwner> owner, uint16_t port )
+{
+    return std::make_shared<SmartSocket>( owner, port, Socket::Protocol::UDP );
 }
 
 SocketPtr SmartSocket::connectTCP ( Owner *owner, const IpAddrPort& address, bool forceTunnel )
@@ -531,10 +598,22 @@ SocketPtr SmartSocket::connectTCP ( Owner *owner, const IpAddrPort& address, boo
     return SocketPtr ( new SmartSocket ( owner, { addr, address.port }, Socket::Protocol::TCP, forceTunnel ) );
 }
 
+std::shared_ptr<SmartSocket> SmartSocket::connectTCP ( std::shared_ptr<SocketOwner> owner, const IpAddrPort& address, bool forceTunnel )
+{
+    const string addr = getAddrFromSockAddr ( address.getAddrInfo()->ai_addr ); // Resolve IP address first
+    return std::make_shared<SmartSocket>( owner, IpAddrPort{ addr, address.port }, Socket::Protocol::TCP, forceTunnel );
+}
+
 SocketPtr SmartSocket::connectUDP ( Owner *owner, const IpAddrPort& address, bool forceTunnel )
 {
     const string addr = getAddrFromSockAddr ( address.getAddrInfo()->ai_addr ); // Resolve IP address first
     return SocketPtr ( new SmartSocket ( owner, { addr, address.port }, Socket::Protocol::UDP, forceTunnel ) );
+}
+
+std::shared_ptr<SmartSocket> SmartSocket::connectUDP ( std::shared_ptr<SocketOwner> owner, const IpAddrPort& address, bool forceTunnel )
+{
+    const string addr = getAddrFromSockAddr ( address.getAddrInfo()->ai_addr ); // Resolve IP address first
+    return std::make_shared<SmartSocket>( owner, IpAddrPort{ addr, address.port }, Socket::Protocol::UDP, forceTunnel );
 }
 
 bool SmartSocket::isTunnel() const
@@ -543,6 +622,37 @@ bool SmartSocket::isTunnel() const
 }
 
 SocketPtr SmartSocket::accept ( Socket::Owner *owner )
+{
+    if ( _isDirectAccept && _directSocket )
+        return _directSocket->accept ( owner );
+
+    SocketPtr socket = _tunSocket->accept ( owner );
+
+    if ( ! socket )
+        return 0;
+
+    auto it = _pendingClients.begin();
+
+    for ( ; it != _pendingClients.end(); ++it )
+    {
+        if ( it->second.address == socket->address )
+            break;
+    }
+
+    if ( it != _pendingClients.end() )
+    {
+        _pendingTimers.erase ( it->second.timer.get() );
+
+        _pendingClients.erase ( it );
+
+        if ( _pendingClients.empty() && _pendingTimers.empty() )
+            _sendTimer.reset();
+    }
+
+    return socket;
+}
+
+SocketPtr SmartSocket::accept ( std::shared_ptr<SocketOwner> owner )
 {
     if ( _isDirectAccept && _directSocket )
         return _directSocket->accept ( owner );

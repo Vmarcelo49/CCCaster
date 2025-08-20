@@ -148,9 +148,16 @@ private:
 
     // Construct a server socket
     UdpSocket ( Socket::Owner *owner, uint16_t port, const Type& type, bool isRaw );
+    
+    // Modern server constructor with RAII
+    UdpSocket ( std::shared_ptr<SocketOwner> owner, uint16_t port, const Type& type, bool isRaw );
 
     // Construct a client socket
     UdpSocket ( Socket::Owner *owner, const IpAddrPort& address, const Type& type,
+                bool isRaw, uint64_t connectTimeout );
+                
+    // Modern client constructor with RAII
+    UdpSocket ( std::shared_ptr<SocketOwner> owner, const IpAddrPort& address, const Type& type,
                 bool isRaw, uint64_t connectTimeout );
 
     // Construct a socket from SocketShareData

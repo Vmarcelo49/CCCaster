@@ -28,7 +28,35 @@ UdpSocket::UdpSocket ( Socket::Owner *owner, uint16_t port, const Type& type, bo
     SocketManager::get().add ( this );
 }
 
+UdpSocket::UdpSocket ( std::shared_ptr<SocketOwner> owner, uint16_t port, const Type& type, bool isRaw )
+    : Socket ( owner, IpAddrPort ( "", port ), Protocol::UDP, isRaw )
+    , _type ( type )
+    , _gbn ( this, DEFAULT_SEND_INTERVAL, isConnectionLess() ? 0 : DEFAULT_KEEP_ALIVE_TIMEOUT )
+{
+    _state = State::Listening;
+
+    Socket::init();
+    SocketManager::get().add ( this );
+}
+
 UdpSocket::UdpSocket ( Socket::Owner *owner, const IpAddrPort& address, const Type& type,
+                       bool isRaw, uint64_t connectTimeout )
+    : Socket ( owner, address, Protocol::UDP, isRaw )
+    , _type ( type )
+    , _gbn ( this, DEFAULT_SEND_INTERVAL, isConnectionLess() ? 0 : connectTimeout )
+{
+    _state = ( isConnectionLess() ? State::Connected : State::Connecting );
+
+    Socket::init();
+    SocketManager::get().add ( this );
+
+    _connectTimeout = connectTimeout;
+
+    if ( isConnecting() )
+        send ( new UdpControl ( UdpControl::ConnectRequest ) );
+}
+
+UdpSocket::UdpSocket ( std::shared_ptr<SocketOwner> owner, const IpAddrPort& address, const Type& type,
                        bool isRaw, uint64_t connectTimeout )
     : Socket ( owner, address, Protocol::UDP, isRaw )
     , _type ( type )
@@ -178,9 +206,19 @@ SocketPtr UdpSocket::listen ( Socket::Owner *owner, uint16_t port )
     return SocketPtr ( new UdpSocket ( owner, port, Type::Server, false ) );
 }
 
+std::shared_ptr<UdpSocket> UdpSocket::listen ( std::shared_ptr<SocketOwner> owner, uint16_t port )
+{
+    return std::make_shared<UdpSocket>( owner, port, Type::Server, false );
+}
+
 SocketPtr UdpSocket::connect ( Socket::Owner *owner, const IpAddrPort& address, uint64_t connectTimeout )
 {
     return SocketPtr ( new UdpSocket ( owner, address, Type::Client, false, connectTimeout ) );
+}
+
+std::shared_ptr<UdpSocket> UdpSocket::connect ( std::shared_ptr<SocketOwner> owner, const IpAddrPort& address, uint64_t connectTimeout )
+{
+    return std::make_shared<UdpSocket>( owner, address, Type::Client, false, connectTimeout );
 }
 
 SocketPtr UdpSocket::bind ( Socket::Owner *owner, uint16_t port, bool isRaw )
@@ -188,9 +226,19 @@ SocketPtr UdpSocket::bind ( Socket::Owner *owner, uint16_t port, bool isRaw )
     return SocketPtr ( new UdpSocket ( owner, port, Type::ConnectionLess, isRaw ) );
 }
 
+std::shared_ptr<UdpSocket> UdpSocket::bind ( std::shared_ptr<SocketOwner> owner, uint16_t port, bool isRaw )
+{
+    return std::make_shared<UdpSocket>( owner, port, Type::ConnectionLess, isRaw );
+}
+
 SocketPtr UdpSocket::bind ( Socket::Owner *owner, const IpAddrPort& address, bool isRaw )
 {
     return SocketPtr ( new UdpSocket ( owner, address, Type::ConnectionLess, isRaw, DEFAULT_CONNECT_TIMEOUT ) );
+}
+
+std::shared_ptr<UdpSocket> UdpSocket::bind ( std::shared_ptr<SocketOwner> owner, const IpAddrPort& address, bool isRaw )
+{
+    return std::make_shared<UdpSocket>( owner, address, Type::ConnectionLess, isRaw, DEFAULT_CONNECT_TIMEOUT );
 }
 
 SocketPtr UdpSocket::shared ( Socket::Owner *owner, const SocketShareData& data )
@@ -207,6 +255,20 @@ SocketPtr UdpSocket::accept ( Socket::Owner *owner )
         return 0;
 
     _acceptedSocket->owner = owner;
+
+    SocketPtr ret;
+    _acceptedSocket.swap ( ret );
+    return ret;
+}
+
+SocketPtr UdpSocket::accept ( std::shared_ptr<SocketOwner> owner )
+{
+    if ( ! _acceptedSocket.get() )
+        return 0;
+
+    // For modern ownership, we need to set the modernOwner instead of legacy owner
+    _acceptedSocket->modernOwner = owner;
+    _acceptedSocket->owner = nullptr; // Clear legacy owner
 
     SocketPtr ret;
     _acceptedSocket.swap ( ret );
