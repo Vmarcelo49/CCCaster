@@ -26,14 +26,25 @@ public:
 
     // Listen for connections on the given port
     static SocketPtr listen ( Socket::Owner *owner, uint16_t port );
+    
+    // Modern factory with RAII
+    static std::shared_ptr<UdpSocket> listen ( std::shared_ptr<SocketOwner> owner, uint16_t port );
 
     // Connect to the given address and port
     static SocketPtr connect ( Socket::Owner *owner, const IpAddrPort& address,
+                               uint64_t connectTimeout = DEFAULT_CONNECT_TIMEOUT );
+                               
+    // Modern connect with RAII
+    static std::shared_ptr<UdpSocket> connect ( std::shared_ptr<SocketOwner> owner, const IpAddrPort& address,
                                uint64_t connectTimeout = DEFAULT_CONNECT_TIMEOUT );
 
     // Create connection-less sockets
     static SocketPtr bind ( Socket::Owner *owner, uint16_t port, bool isRaw = false );
     static SocketPtr bind ( Socket::Owner *owner, const IpAddrPort& address, bool isRaw = false );
+    
+    // Modern bind with RAII
+    static std::shared_ptr<UdpSocket> bind ( std::shared_ptr<SocketOwner> owner, uint16_t port, bool isRaw = false );
+    static std::shared_ptr<UdpSocket> bind ( std::shared_ptr<SocketOwner> owner, const IpAddrPort& address, bool isRaw = false );
 
     // Create a socket from SocketShareData
     static SocketPtr shared ( Socket::Owner *owner, const SocketShareData& data );
@@ -46,6 +57,9 @@ public:
 
     // Accept a new socket, returns 0 if no socket to accept
     SocketPtr accept ( Socket::Owner *owner ) override;
+    
+    // Modern accept with RAII
+    SocketPtr accept ( std::shared_ptr<SocketOwner> owner ) override;
 
     // If this UDP socket is backed by a real socket handle, and not proxy of another socket
     bool isReal() const { return ( _type == Type::ConnectionLess || _type == Type::Client || _type == Type::Server ); }
@@ -134,9 +148,16 @@ private:
 
     // Construct a server socket
     UdpSocket ( Socket::Owner *owner, uint16_t port, const Type& type, bool isRaw );
+    
+    // Modern server constructor with RAII
+    UdpSocket ( std::shared_ptr<SocketOwner> owner, uint16_t port, const Type& type, bool isRaw );
 
     // Construct a client socket
     UdpSocket ( Socket::Owner *owner, const IpAddrPort& address, const Type& type,
+                bool isRaw, uint64_t connectTimeout );
+                
+    // Modern client constructor with RAII
+    UdpSocket ( std::shared_ptr<SocketOwner> owner, const IpAddrPort& address, const Type& type,
                 bool isRaw, uint64_t connectTimeout );
 
     // Construct a socket from SocketShareData

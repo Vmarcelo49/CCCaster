@@ -41,6 +41,12 @@ Socket::Socket ( Owner *owner, const IpAddrPort& address, Protocol protocol, boo
     resetBuffer();
 }
 
+Socket::Socket ( std::shared_ptr<SocketOwner> owner, const IpAddrPort& address, Protocol protocol, bool isRaw )
+    : owner ( nullptr ), modernOwner ( owner ), address ( address ), protocol ( protocol ), _isRaw ( isRaw )
+{
+    resetBuffer();
+}
+
 Socket::~Socket()
 {
     disconnect();
@@ -54,6 +60,7 @@ void Socket::disconnect()
         closesocket ( _fd );
 
     owner = 0;
+    modernOwner.reset();
     _state = State::Disconnected;
     _fd = 0;
 
@@ -69,16 +76,18 @@ void Socket::init()
     WinException exc;
     shared_ptr<addrinfo> addrInfo;
 
-    // TODO proper binding of IPv6 interfaces
+    // Get global IP version preference
+    IpVersionPreference preference = getGlobalIpVersionPreference();
+    
     if ( isClient() && isUDP() )
     {
         // For client UDP sockets, bind to any available local port
-        addrInfo = getAddrInfo ( "", 0, true, true );
+        addrInfo = getAddrInfoWithPreference ( "", 0, preference, true );
     }
     else
     {
         // Otherwise bind to the given address and port
-        addrInfo = getAddrInfo ( address.addr, address.port, true, isServer() || isUDP() );
+        addrInfo = getAddrInfoWithPreference ( address.addr, address.port, preference, isServer() || isUDP() );
     }
 
     addrinfo *res = addrInfo.get();
@@ -305,6 +314,17 @@ bool Socket::send ( const char *buffer, size_t len, const IpAddrPort& address )
     }
 
     return true;
+}
+
+// Modern span-based send methods
+bool Socket::send ( std::span<const char> data )
+{
+    return send(data.data(), data.size());
+}
+
+bool Socket::send ( std::span<const char> data, const IpAddrPort& address )
+{
+    return send(data.data(), data.size(), address);
 }
 
 int Socket::recv ( char *buffer, size_t& len )
@@ -644,5 +664,82 @@ void Socket::setPacketLoss ( uint8_t percentage )
 void Socket::setCheckSumFail ( uint8_t percentage )
 {
     _hashFailRate = percentage;
+}
+
+// Base implementations of virtual socket events
+void Socket::socketConnected()
+{
+    notifyConnected();
+}
+
+void Socket::socketDisconnected()
+{
+    notifyDisconnected();
+}
+
+// Modern interface helper functions
+bool Socket::hasValidOwner() const
+{
+    return owner != nullptr || !modernOwner.expired();
+}
+
+void Socket::notifyConnected()
+{
+    // Call legacy callback if available
+    if (owner) {
+        owner->socketConnected(this);
+    }
+    
+    // Call modern callback if available
+    if (auto ownerPtr = modernOwner.lock()) {
+        if (ownerPtr->callbacks_.onConnected) {
+            ownerPtr->callbacks_.onConnected();
+        }
+    }
+}
+
+void Socket::notifyDisconnected()
+{
+    // Call legacy callback if available
+    if (owner) {
+        owner->socketDisconnected(this);
+    }
+    
+    // Call modern callback if available
+    if (auto ownerPtr = modernOwner.lock()) {
+        if (ownerPtr->callbacks_.onDisconnected) {
+            ownerPtr->callbacks_.onDisconnected();
+        }
+    }
+}
+
+void Socket::notifyMessage(const MsgPtr& msg, const IpAddrPort& address)
+{
+    // Call legacy callback if available
+    if (owner) {
+        owner->socketRead(this, msg, address);
+    }
+    
+    // Call modern callback if available
+    if (auto ownerPtr = modernOwner.lock()) {
+        if (ownerPtr->callbacks_.onMessage) {
+            ownerPtr->callbacks_.onMessage(msg, address);
+        }
+    }
+}
+
+void Socket::notifyRawData(std::span<const char> data, const IpAddrPort& address)
+{
+    // Call legacy callback if available
+    if (owner) {
+        owner->socketRead(this, data.data(), data.size(), address);
+    }
+    
+    // Call modern callback if available
+    if (auto ownerPtr = modernOwner.lock()) {
+        if (ownerPtr->callbacks_.onRawData) {
+            ownerPtr->callbacks_.onRawData(data, address);
+        }
+    }
 }
 

@@ -22,6 +22,15 @@ TcpSocket::TcpSocket ( Socket::Owner *owner, uint16_t port, bool isRaw )
     SocketManager::get().add ( this );
 }
 
+TcpSocket::TcpSocket ( std::shared_ptr<SocketOwner> owner, uint16_t port, bool isRaw )
+    : Socket ( owner, IpAddrPort ( "", port ), Protocol::TCP, isRaw )
+{
+    _state = State::Listening;
+
+    Socket::init();
+    SocketManager::get().add ( this );
+}
+
 TcpSocket::TcpSocket ( Socket::Owner *owner, const IpAddrPort& address, bool isRaw, uint64_t connectTimeout )
     : Socket ( owner, address, Protocol::TCP, isRaw )
 {
@@ -36,7 +45,30 @@ TcpSocket::TcpSocket ( Socket::Owner *owner, const IpAddrPort& address, bool isR
     _connectTimer->start ( connectTimeout );
 }
 
+TcpSocket::TcpSocket ( std::shared_ptr<SocketOwner> owner, const IpAddrPort& address, bool isRaw, uint64_t connectTimeout )
+    : Socket ( owner, address, Protocol::TCP, isRaw )
+{
+    _state = State::Connecting;
+
+    Socket::init();
+    SocketManager::get().add ( this );
+
+    _connectTimeout = connectTimeout;
+
+    _connectTimer.reset ( new Timer ( this ) );
+    _connectTimer->start ( connectTimeout );
+}
+
 TcpSocket::TcpSocket ( Socket::Owner *owner, int fd, const IpAddrPort& address, bool isRaw )
+    : Socket ( owner, address, Protocol::TCP, isRaw )
+{
+    _state = State::Connected;
+    _fd = fd;
+
+    SocketManager::get().add ( this );
+}
+
+TcpSocket::TcpSocket ( std::shared_ptr<SocketOwner> owner, int fd, const IpAddrPort& address, bool isRaw )
     : Socket ( owner, address, Protocol::TCP, isRaw )
 {
     _state = State::Connected;
@@ -91,9 +123,19 @@ SocketPtr TcpSocket::listen ( Socket::Owner *owner, uint16_t port, bool isRaw )
     return SocketPtr ( new TcpSocket ( owner, port, isRaw ) );
 }
 
+std::shared_ptr<TcpSocket> TcpSocket::listen ( std::shared_ptr<SocketOwner> owner, uint16_t port, bool isRaw )
+{
+    return std::make_shared<TcpSocket>( owner, port, isRaw );
+}
+
 SocketPtr TcpSocket::connect ( Socket::Owner *owner, const IpAddrPort& address, bool isRaw, uint64_t connectTimeout )
 {
     return SocketPtr ( new TcpSocket ( owner, address, isRaw, connectTimeout ) );
+}
+
+std::shared_ptr<TcpSocket> TcpSocket::connect ( std::shared_ptr<SocketOwner> owner, const IpAddrPort& address, bool isRaw, uint64_t connectTimeout )
+{
+    return std::make_shared<TcpSocket>( owner, address, isRaw, connectTimeout );
 }
 
 SocketPtr TcpSocket::accept ( Socket::Owner *owner )
@@ -114,6 +156,26 @@ SocketPtr TcpSocket::accept ( Socket::Owner *owner )
     }
 
     return SocketPtr ( new TcpSocket ( owner, newFd, IpAddrPort ( ( sockaddr * ) &sas ), _isRaw ) );
+}
+
+SocketPtr TcpSocket::accept ( std::shared_ptr<SocketOwner> owner )
+{
+    if ( ! isServer() )
+        return 0;
+
+    sockaddr_storage sas;
+    int saLen = sizeof ( sas );
+
+    const int newFd = ::accept ( _fd, ( sockaddr * ) &sas, &saLen );
+
+    if ( newFd == INVALID_SOCKET )
+    {
+        const int error = WSAGetLastError();
+        LOG_SOCKET ( this, "[%d] %s; accept failed", error, WinException::getAsString ( error ) );
+        return 0;
+    }
+
+    return std::make_shared<TcpSocket>( owner, newFd, IpAddrPort ( ( sockaddr * ) &sas ), _isRaw );
 }
 
 bool TcpSocket::send ( SerializableMessage *message, const IpAddrPort& address )
