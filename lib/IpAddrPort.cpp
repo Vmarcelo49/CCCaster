@@ -12,8 +12,8 @@
 
 using namespace std;
 
-// Global IP version preference - use DualStack for better hostname resolution
-static IpVersionPreference globalIpVersionPreference = IpVersionPreference::DualStack;
+// Global IP version preference
+static IpVersionPreference globalIpVersionPreference = IpVersionPreference::IPv4Only;
 
 void setGlobalIpVersionPreference(IpVersionPreference preference)
 {
@@ -28,22 +28,10 @@ IpVersionPreference getGlobalIpVersionPreference()
 
 shared_ptr<addrinfo> getAddrInfo ( const string& addr, uint16_t port, bool isV4, bool passive )
 {
-    // Use the global preference setting for better hostname resolution
-    IpVersionPreference preference = getGlobalIpVersionPreference();
-    
-    // If preference is DualStack, use the enhanced function
-    if ( preference == IpVersionPreference::DualStack )
-    {
-        return getAddrInfoWithPreference ( addr, port, preference, passive );
-    }
-    
-    // Otherwise use the legacy behavior but respect the preference
-    bool useV4 = ( preference == IpVersionPreference::IPv4Only ) ? true : false;
-    
     addrinfo addrConf, *addrRes = 0;
     ZeroMemory ( &addrConf, sizeof ( addrConf ) );
 
-    addrConf.ai_family = ( useV4 ? AF_INET : AF_INET6 );
+    addrConf.ai_family = ( isV4 ? AF_INET : AF_INET6 );
 
     if ( passive )
         addrConf.ai_flags = AI_PASSIVE;
@@ -191,9 +179,9 @@ IpAddrPort::IpAddrPort ( const string& addrPort ) : addr ( addrPort ), port ( 0 
         }
     }
     
-    // If there's only one colon, treat it as port separator for IPv4:port
-    // For IPv6 addresses like ::1 without port, we need to be more careful
-    if ( colonCount == 1 )
+    // If there's only one colon or two colons (like ::1:port), treat the last colon as port separator
+    // For IPv6 without brackets, this is ambiguous, but we do our best
+    if ( colonCount == 1 || ( colonCount == 2 && addrPort.substr(0, 2) == "::" ) )
     {
         // Likely IPv4:port or ::1:port format
         if ( lastColonPos == ( int ) addrPort.size() - 1 )
@@ -208,40 +196,6 @@ IpAddrPort::IpAddrPort ( const string& addrPort ) : addr ( addrPort ), port ( 0 
         // Determine if this looks like IPv6
         if ( addr.find ( ':' ) != string::npos )
             isV4 = false;
-    }
-    else if ( colonCount == 2 )
-    {
-        // Special case for IPv6 addresses like ::1 or ::1:port
-        if ( addrPort.substr(0, 2) == "::" )
-        {
-            // Check if the last part after colon could be a valid port number
-            string lastPart = addrPort.substr(lastColonPos + 1);
-            stringstream ss(lastPart);
-            uint16_t testPort;
-            // For it to be a port, it must be numeric and in valid port range (1-65535)
-            // Also, it shouldn't be part of an IPv6 address like ::1
-            if (ss >> testPort && lastPart.length() >= 2 && testPort > 0 && testPort <= 65535)
-            {
-                // This looks like ::1:port format
-                port = testPort;
-                addr = addrPort.substr(0, lastColonPos);
-                isV4 = false;
-            }
-            else
-            {
-                // This is likely just an IPv6 address like ::1
-                addr = addrPort;
-                isV4 = false;
-                port = 0;
-            }
-        }
-        else
-        {
-            // Other 2-colon case - treat as IPv6 address without port
-            addr = addrPort;
-            isV4 = false;
-            port = 0;
-        }
     }
     else if ( colonCount > 2 )
     {
