@@ -579,7 +579,7 @@ SocketPtr SmartSocket::listenTCP ( Owner *owner, uint16_t port )
 
 std::shared_ptr<SmartSocket> SmartSocket::listenTCP ( std::shared_ptr<SocketOwner> owner, uint16_t port )
 {
-    return std::make_shared<SmartSocket>( owner, port, Socket::Protocol::TCP );
+    return std::shared_ptr<SmartSocket>( new SmartSocket( owner, port, Socket::Protocol::TCP ) );
 }
 
 SocketPtr SmartSocket::listenUDP ( Owner *owner, uint16_t port )
@@ -589,7 +589,7 @@ SocketPtr SmartSocket::listenUDP ( Owner *owner, uint16_t port )
 
 std::shared_ptr<SmartSocket> SmartSocket::listenUDP ( std::shared_ptr<SocketOwner> owner, uint16_t port )
 {
-    return std::make_shared<SmartSocket>( owner, port, Socket::Protocol::UDP );
+    return std::shared_ptr<SmartSocket>( new SmartSocket( owner, port, Socket::Protocol::UDP ) );
 }
 
 SocketPtr SmartSocket::connectTCP ( Owner *owner, const IpAddrPort& address, bool forceTunnel )
@@ -601,7 +601,7 @@ SocketPtr SmartSocket::connectTCP ( Owner *owner, const IpAddrPort& address, boo
 std::shared_ptr<SmartSocket> SmartSocket::connectTCP ( std::shared_ptr<SocketOwner> owner, const IpAddrPort& address, bool forceTunnel )
 {
     const string addr = getAddrFromSockAddr ( address.getAddrInfo()->ai_addr ); // Resolve IP address first
-    return std::make_shared<SmartSocket>( owner, IpAddrPort{ addr, address.port }, Socket::Protocol::TCP, forceTunnel );
+    return std::shared_ptr<SmartSocket>( new SmartSocket( owner, IpAddrPort{ addr, address.port }, Socket::Protocol::TCP, forceTunnel ) );
 }
 
 SocketPtr SmartSocket::connectUDP ( Owner *owner, const IpAddrPort& address, bool forceTunnel )
@@ -613,7 +613,7 @@ SocketPtr SmartSocket::connectUDP ( Owner *owner, const IpAddrPort& address, boo
 std::shared_ptr<SmartSocket> SmartSocket::connectUDP ( std::shared_ptr<SocketOwner> owner, const IpAddrPort& address, bool forceTunnel )
 {
     const string addr = getAddrFromSockAddr ( address.getAddrInfo()->ai_addr ); // Resolve IP address first
-    return std::make_shared<SmartSocket>( owner, IpAddrPort{ addr, address.port }, Socket::Protocol::UDP, forceTunnel );
+    return std::shared_ptr<SmartSocket>( new SmartSocket( owner, IpAddrPort{ addr, address.port }, Socket::Protocol::UDP, forceTunnel ) );
 }
 
 bool SmartSocket::isTunnel() const

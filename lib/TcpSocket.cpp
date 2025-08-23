@@ -125,7 +125,7 @@ SocketPtr TcpSocket::listen ( Socket::Owner *owner, uint16_t port, bool isRaw )
 
 std::shared_ptr<TcpSocket> TcpSocket::listen ( std::shared_ptr<SocketOwner> owner, uint16_t port, bool isRaw )
 {
-    return std::make_shared<TcpSocket>( owner, port, isRaw );
+    return std::shared_ptr<TcpSocket>( new TcpSocket( owner, port, isRaw ) );
 }
 
 SocketPtr TcpSocket::connect ( Socket::Owner *owner, const IpAddrPort& address, bool isRaw, uint64_t connectTimeout )
@@ -135,7 +135,7 @@ SocketPtr TcpSocket::connect ( Socket::Owner *owner, const IpAddrPort& address, 
 
 std::shared_ptr<TcpSocket> TcpSocket::connect ( std::shared_ptr<SocketOwner> owner, const IpAddrPort& address, bool isRaw, uint64_t connectTimeout )
 {
-    return std::make_shared<TcpSocket>( owner, address, isRaw, connectTimeout );
+    return std::shared_ptr<TcpSocket>( new TcpSocket( owner, address, isRaw, connectTimeout ) );
 }
 
 SocketPtr TcpSocket::accept ( Socket::Owner *owner )
@@ -175,7 +175,7 @@ SocketPtr TcpSocket::accept ( std::shared_ptr<SocketOwner> owner )
         return 0;
     }
 
-    return std::make_shared<TcpSocket>( owner, newFd, IpAddrPort ( ( sockaddr * ) &sas ), _isRaw );
+    return std::shared_ptr<TcpSocket>( new TcpSocket( owner, newFd, IpAddrPort ( ( sockaddr * ) &sas ), _isRaw ) );
 }
 
 bool TcpSocket::send ( SerializableMessage *message, const IpAddrPort& address )

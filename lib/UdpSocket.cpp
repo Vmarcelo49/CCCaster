@@ -208,7 +208,7 @@ SocketPtr UdpSocket::listen ( Socket::Owner *owner, uint16_t port )
 
 std::shared_ptr<UdpSocket> UdpSocket::listen ( std::shared_ptr<SocketOwner> owner, uint16_t port )
 {
-    return std::make_shared<UdpSocket>( owner, port, Type::Server, false );
+    return std::shared_ptr<UdpSocket>( new UdpSocket( owner, port, Type::Server, false ) );
 }
 
 SocketPtr UdpSocket::connect ( Socket::Owner *owner, const IpAddrPort& address, uint64_t connectTimeout )
@@ -218,7 +218,7 @@ SocketPtr UdpSocket::connect ( Socket::Owner *owner, const IpAddrPort& address, 
 
 std::shared_ptr<UdpSocket> UdpSocket::connect ( std::shared_ptr<SocketOwner> owner, const IpAddrPort& address, uint64_t connectTimeout )
 {
-    return std::make_shared<UdpSocket>( owner, address, Type::Client, false, connectTimeout );
+    return std::shared_ptr<UdpSocket>( new UdpSocket( owner, address, Type::Client, false, connectTimeout ) );
 }
 
 SocketPtr UdpSocket::bind ( Socket::Owner *owner, uint16_t port, bool isRaw )
@@ -228,7 +228,7 @@ SocketPtr UdpSocket::bind ( Socket::Owner *owner, uint16_t port, bool isRaw )
 
 std::shared_ptr<UdpSocket> UdpSocket::bind ( std::shared_ptr<SocketOwner> owner, uint16_t port, bool isRaw )
 {
-    return std::make_shared<UdpSocket>( owner, port, Type::ConnectionLess, isRaw );
+    return std::shared_ptr<UdpSocket>( new UdpSocket( owner, port, Type::ConnectionLess, isRaw ) );
 }
 
 SocketPtr UdpSocket::bind ( Socket::Owner *owner, const IpAddrPort& address, bool isRaw )
@@ -238,7 +238,7 @@ SocketPtr UdpSocket::bind ( Socket::Owner *owner, const IpAddrPort& address, boo
 
 std::shared_ptr<UdpSocket> UdpSocket::bind ( std::shared_ptr<SocketOwner> owner, const IpAddrPort& address, bool isRaw )
 {
-    return std::make_shared<UdpSocket>( owner, address, Type::ConnectionLess, isRaw, DEFAULT_CONNECT_TIMEOUT );
+    return std::shared_ptr<UdpSocket>( new UdpSocket( owner, address, Type::ConnectionLess, isRaw, DEFAULT_CONNECT_TIMEOUT ) );
 }
 
 SocketPtr UdpSocket::shared ( Socket::Owner *owner, const SocketShareData& data )
