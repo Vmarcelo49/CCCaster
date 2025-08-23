@@ -1,4 +1,5 @@
 #include "ExternalIpAddress.hpp"
+#include "IpAddrPort.hpp"
 #include "Logger.hpp"
 
 #include <ws2tcpip.h>
@@ -96,7 +97,21 @@ std::vector<std::string> getInternalIpAddresses() {
     }
 
     addrinfo hints = {};
-    hints.ai_family = AF_INET; // IPv4
+    // Respect global IP version preference
+    IpVersionPreference preference = getGlobalIpVersionPreference();
+    switch ( preference )
+    {
+        case IpVersionPreference::IPv4Only:
+            hints.ai_family = AF_INET;
+            break;
+        case IpVersionPreference::IPv6Only:
+            hints.ai_family = AF_INET6;
+            break;
+        case IpVersionPreference::DualStack:
+        default:
+            hints.ai_family = AF_UNSPEC; // Allow both IPv4 and IPv6
+            break;
+    }
     hints.ai_socktype = SOCK_STREAM;
 
     addrinfo* addrResult = nullptr;
@@ -107,10 +122,18 @@ std::vector<std::string> getInternalIpAddresses() {
 
     std::vector<std::string> res;
     for (addrinfo* ptr = addrResult; ptr != nullptr; ptr = ptr->ai_next) {
-        sockaddr_in* sockaddr_ipv4 = reinterpret_cast<sockaddr_in*>(ptr->ai_addr);
-        char ipStr[INET_ADDRSTRLEN];
-        inet_ntop(AF_INET, &(sockaddr_ipv4->sin_addr), ipStr, sizeof(ipStr));
-        res.push_back(std::string(ipStr));
+        if (ptr->ai_family == AF_INET) {
+            sockaddr_in* sockaddr_ipv4 = reinterpret_cast<sockaddr_in*>(ptr->ai_addr);
+            char ipStr[INET_ADDRSTRLEN];
+            inet_ntop(AF_INET, &(sockaddr_ipv4->sin_addr), ipStr, sizeof(ipStr));
+            res.push_back(std::string(ipStr));
+        }
+        else if (ptr->ai_family == AF_INET6) {
+            sockaddr_in6* sockaddr_ipv6 = reinterpret_cast<sockaddr_in6*>(ptr->ai_addr);
+            char ipStr[INET6_ADDRSTRLEN];
+            inet_ntop(AF_INET6, &(sockaddr_ipv6->sin6_addr), ipStr, sizeof(ipStr));
+            res.push_back(std::string(ipStr));
+        }
     }
 
     freeaddrinfo(addrResult);
