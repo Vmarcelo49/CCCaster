@@ -37,8 +37,9 @@ shared_ptr<addrinfo> getAddrInfo ( const string& addr, uint16_t port, bool isV4,
         return getAddrInfoWithPreference ( addr, port, preference, passive );
     }
     
-    // Otherwise use the legacy behavior but respect the preference
-    bool useV4 = ( preference == IpVersionPreference::IPv4Only ) ? true : false;
+    // Otherwise use the legacy behavior but respect the preference  
+    // For DualStack, we should have been handled above, so this is IPv4Only or IPv6Only
+    bool useV4 = ( preference == IpVersionPreference::IPv4Only );
     
     addrinfo addrConf, *addrRes = 0;
     ZeroMemory ( &addrConf, sizeof ( addrConf ) );
@@ -289,5 +290,25 @@ const shared_ptr<addrinfo>& IpAddrPort::getAddrInfo() const
     if ( _addrInfo.get() )
         return _addrInfo;
     else
-        return ( _addrInfo = ::getAddrInfo ( addr, port, isV4 ) );
+    {
+        // Use global IP version preference for address resolution, but still respect 
+        // explicit IPv6 addresses (isV4 = false) to maintain backward compatibility
+        IpVersionPreference preference = getGlobalIpVersionPreference();
+        
+        // If this is explicitly marked as IPv6 (like [::1]:port), use IPv6-only
+        if ( !isV4 )
+            preference = IpVersionPreference::IPv6Only;
+        // If this is an empty address (like "" for server binding), use global preference
+        else if ( addr.empty() )
+            preference = getGlobalIpVersionPreference();
+        // Otherwise use the global preference unless it would break explicit IPv4 addresses
+        else if ( preference == IpVersionPreference::IPv6Only )
+        {
+            // Check if this looks like an IPv4 address - if so, this will fail in IPv6-only mode
+            // Allow the failure to occur so the user knows about the incompatibility
+            preference = IpVersionPreference::IPv6Only;
+        }
+        
+        return ( _addrInfo = getAddrInfoWithPreference ( addr, port, preference, false ) );
+    }
 }
