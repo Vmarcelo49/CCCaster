@@ -19,10 +19,15 @@ static vector<IpAddrPort> loadRelays() {
     vector<IpAddrPort> relays;
     while (std::getline(infile, str)) {
         if (!str.empty()) {
-            relays.push_back(str);
+            try {
+                relays.push_back(str);
+            } catch (const std::exception& e) {
+                // Log invalid relay entries but continue loading others
+                LOG("Warning: Invalid relay entry '%s': %s", str.c_str(), e.what());
+            }
         }
     }
-	return relays;
+    return relays;
 }
 
 static const vector<IpAddrPort> relayServers = loadRelays();
@@ -30,17 +35,24 @@ static const vector<IpAddrPort> relayServers = loadRelays();
 // Select relay servers based on IP version preference
 static vector<IpAddrPort>::const_iterator selectBestRelay(IpVersionPreference preference) {
     if (relayServers.empty()) {
+        LOG("Warning: No relay servers available in relay list");
         return relayServers.cend();
     }
+    
+    LOG("Selecting relay for preference: %s", 
+        preference == IpVersionPreference::IPv4Only ? "IPv4Only" :
+        preference == IpVersionPreference::IPv6Only ? "IPv6Only" : "DualStack");
     
     // For IPv6-only preference, try to find IPv6 relays first
     if (preference == IpVersionPreference::IPv6Only) {
         for (auto it = relayServers.cbegin(); it != relayServers.cend(); ++it) {
             if (!it->isV4) {
+                LOG("Selected IPv6 relay: %s", it->str().c_str());
                 return it;
             }
         }
         // No IPv6 relay found, return end to indicate failure
+        LOG("Error: No IPv6 relays found for IPv6-only preference");
         return relayServers.cend();
     }
     
@@ -48,16 +60,19 @@ static vector<IpAddrPort>::const_iterator selectBestRelay(IpVersionPreference pr
     if (preference == IpVersionPreference::IPv4Only) {
         for (auto it = relayServers.cbegin(); it != relayServers.cend(); ++it) {
             if (it->isV4) {
+                LOG("Selected IPv4 relay: %s", it->str().c_str());
                 return it;
             }
         }
         // No IPv4 relay found, return end to indicate failure
+        LOG("Error: No IPv4 relays found for IPv4-only preference");
         return relayServers.cend();
     }
     
     // For DualStack, prefer IPv6 but fallback to IPv4
     for (auto it = relayServers.cbegin(); it != relayServers.cend(); ++it) {
         if (!it->isV4) {
+            LOG("Selected IPv6 relay for DualStack: %s", it->str().c_str());
             return it; // Found IPv6, use it
         }
     }
@@ -65,11 +80,13 @@ static vector<IpAddrPort>::const_iterator selectBestRelay(IpVersionPreference pr
     // No IPv6 found, use first IPv4
     for (auto it = relayServers.cbegin(); it != relayServers.cend(); ++it) {
         if (it->isV4) {
+            LOG("Fallback to IPv4 relay for DualStack: %s", it->str().c_str());
             return it;
         }
     }
     
     // Fallback to first available relay
+    LOG("Using first available relay as fallback: %s", relayServers.cbegin()->str().c_str());
     return relayServers.cbegin();
 }
 
@@ -197,11 +214,22 @@ SmartSocket::SmartSocket ( Owner *owner, uint16_t port, Socket::Protocol protoco
 
     _vpsAddress = selectBestRelay(getGlobalIpVersionPreference());
     if (_vpsAddress == relayServers.cend()) {
-        // No suitable relay found, fallback to first available  
-        _vpsAddress = relayServers.cbegin();
+        LOG("Warning: No suitable relay found for current IP preference, trying first available");
+        if (!relayServers.empty()) {
+            _vpsAddress = relayServers.cbegin();
+        } else {
+            LOG("Error: No relay servers available at all");
+        }
     }
     if (_vpsAddress != relayServers.cend()) {
-        _vpsSocket = TcpSocket::connect ( this, *_vpsAddress, true ); // Raw socket
+        try {
+            _vpsSocket = TcpSocket::connect ( this, *_vpsAddress, true ); // Raw socket
+            LOG("Connected to relay server: %s", _vpsAddress->str().c_str());
+        } catch (const std::exception& e) {
+            LOG("Failed to connect to relay server %s: %s", _vpsAddress->str().c_str(), e.what());
+        }
+    } else {
+        LOG("Warning: No VPS socket will be created - relay functionality disabled");
     }
 
     try
@@ -236,11 +264,22 @@ SmartSocket::SmartSocket ( std::shared_ptr<SocketOwner> owner, uint16_t port, So
 
     _vpsAddress = selectBestRelay(getGlobalIpVersionPreference());
     if (_vpsAddress == relayServers.cend()) {
-        // No suitable relay found, fallback to first available  
-        _vpsAddress = relayServers.cbegin();
+        LOG("Warning: No suitable relay found for current IP preference, trying first available");
+        if (!relayServers.empty()) {
+            _vpsAddress = relayServers.cbegin();
+        } else {
+            LOG("Error: No relay servers available at all");
+        }
     }
     if (_vpsAddress != relayServers.cend()) {
-        _vpsSocket = TcpSocket::connect ( this, *_vpsAddress, true ); // Raw socket
+        try {
+            _vpsSocket = TcpSocket::connect ( this, *_vpsAddress, true ); // Raw socket
+            LOG("Connected to relay server: %s", _vpsAddress->str().c_str());
+        } catch (const std::exception& e) {
+            LOG("Failed to connect to relay server %s: %s", _vpsAddress->str().c_str(), e.what());
+        }
+    } else {
+        LOG("Warning: No VPS socket will be created - relay functionality disabled");
     }
 
     try

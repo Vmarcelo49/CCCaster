@@ -37,9 +37,9 @@ std::string getLoopbackAddress()
             return "::1";
         case IpVersionPreference::DualStack:
         default:
-            // For DualStack, prefer IPv4 loopback for better compatibility
-            // since most internal communication expects IPv4
-            return "127.0.0.1";
+            // For DualStack, prefer IPv6 loopback since it can handle both
+            // IPv4-mapped addresses if needed
+            return "::1";
     }
 }
 
@@ -233,27 +233,40 @@ IpAddrPort::IpAddrPort ( const string& addrPort ) : addr ( addrPort ), port ( 0 
         if ( addr.find ( ':' ) != string::npos )
             isV4 = false;
     }
-    else if ( colonCount == 2 )
+    else if ( colonCount >= 2 )
     {
-        // Special case for IPv6 addresses like ::1 or ::1:port
+        // Handle IPv6 addresses - multiple colons indicate IPv6
+        // Special case for IPv6 addresses like ::1 with possible port
         if ( addrPort.substr(0, 2) == "::" )
         {
-            // Check if the last part after colon could be a valid port number
+            // Check if the last part after the final colon could be a valid port number
             string lastPart = addrPort.substr(lastColonPos + 1);
             stringstream ss(lastPart);
             uint16_t testPort;
-            // For it to be a port, it must be numeric and in valid port range (1-65535)
-            // Also, it shouldn't be part of an IPv6 address like ::1
-            if (ss >> testPort && lastPart.length() >= 2 && testPort > 0 && testPort <= 65535)
+            string remainingChars;
+            
+            // For it to be a port, it must be all numeric and in valid port range (1-65535)
+            if ( ss >> testPort && ss.eof() && testPort > 0 && testPort <= 65535 )
             {
-                // This looks like ::1:port format
-                port = testPort;
-                addr = addrPort.substr(0, lastColonPos);
-                isV4 = false;
+                // This looks like ::1:port format - verify the address part is valid
+                string addrPart = addrPort.substr(0, lastColonPos);
+                if ( addrPart == "::1" || addrPart == "::" )
+                {
+                    port = testPort;
+                    addr = addrPart;
+                    isV4 = false;
+                }
+                else
+                {
+                    // Complex IPv6 address with port-like ending, treat as address only
+                    addr = addrPort;
+                    isV4 = false;
+                    port = 0;
+                }
             }
             else
             {
-                // This is likely just an IPv6 address like ::1
+                // This is just an IPv6 address like ::1 or ::ffff:192.168.1.1
                 addr = addrPort;
                 isV4 = false;
                 port = 0;
@@ -261,22 +274,25 @@ IpAddrPort::IpAddrPort ( const string& addrPort ) : addr ( addrPort ), port ( 0 
         }
         else
         {
-            // Other 2-colon case - treat as IPv6 address without port
+            // Regular IPv6 address with multiple colons - no port parsing
             addr = addrPort;
             isV4 = false;
             port = 0;
         }
     }
-    else if ( colonCount > 2 )
-    {
-        // Likely IPv6 address without port
-        addr = addrPort;
-        isV4 = false;
-        port = 0; // No port specified
-    }
     else
     {
-        // Fallback to original logic for IPv4
+        // No colons or single colon - handle as IPv4 or invalid address
+        if ( colonCount == 0 )
+        {
+            // No port specified, just an address
+            addr = addrPort;
+            isV4 = true;  // Assume IPv4 if no colons
+            port = 0;
+            return;
+        }
+        
+        // Single colon - likely IPv4:port format
         int i;
         for ( i = addr.size() - 1; i >= 0; --i )
             if ( addr[i] == ':' )
