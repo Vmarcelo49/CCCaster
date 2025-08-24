@@ -18,12 +18,60 @@ static vector<IpAddrPort> loadRelays() {
     std::string str;
     vector<IpAddrPort> relays;
     while (std::getline(infile, str)) {
-        relays.push_back(str);
+        if (!str.empty()) {
+            relays.push_back(str);
+        }
     }
 	return relays;
 }
 
 static const vector<IpAddrPort> relayServers = loadRelays();
+
+// Select relay servers based on IP version preference
+static vector<IpAddrPort>::const_iterator selectBestRelay(IpVersionPreference preference) {
+    if (relayServers.empty()) {
+        return relayServers.cend();
+    }
+    
+    // For IPv6-only preference, try to find IPv6 relays first
+    if (preference == IpVersionPreference::IPv6Only) {
+        for (auto it = relayServers.cbegin(); it != relayServers.cend(); ++it) {
+            if (!it->isV4) {
+                return it;
+            }
+        }
+        // No IPv6 relay found, return end to indicate failure
+        return relayServers.cend();
+    }
+    
+    // For IPv4-only preference, try to find IPv4 relays first
+    if (preference == IpVersionPreference::IPv4Only) {
+        for (auto it = relayServers.cbegin(); it != relayServers.cend(); ++it) {
+            if (it->isV4) {
+                return it;
+            }
+        }
+        // No IPv4 relay found, return end to indicate failure
+        return relayServers.cend();
+    }
+    
+    // For DualStack, prefer IPv6 but fallback to IPv4
+    for (auto it = relayServers.cbegin(); it != relayServers.cend(); ++it) {
+        if (!it->isV4) {
+            return it; // Found IPv6, use it
+        }
+    }
+    
+    // No IPv6 found, use first IPv4
+    for (auto it = relayServers.cbegin(); it != relayServers.cend(); ++it) {
+        if (it->isV4) {
+            return it;
+        }
+    }
+    
+    // Fallback to first available relay
+    return relayServers.cbegin();
+}
 
 /* Tunnel protocol
 
@@ -147,8 +195,14 @@ SmartSocket::SmartSocket ( Owner *owner, uint16_t port, Socket::Protocol protoco
 
     _state = State::Listening;
 
-    _vpsAddress = relayServers.cbegin();
-    _vpsSocket = TcpSocket::connect ( this, *_vpsAddress, true ); // Raw socket
+    _vpsAddress = selectBestRelay(getGlobalIpVersionPreference());
+    if (_vpsAddress == relayServers.cend()) {
+        // No suitable relay found, fallback to first available  
+        _vpsAddress = relayServers.cbegin();
+    }
+    if (_vpsAddress != relayServers.cend()) {
+        _vpsSocket = TcpSocket::connect ( this, *_vpsAddress, true ); // Raw socket
+    }
 
     try
     {
@@ -180,8 +234,14 @@ SmartSocket::SmartSocket ( std::shared_ptr<SocketOwner> owner, uint16_t port, So
 
     _state = State::Listening;
 
-    _vpsAddress = relayServers.cbegin();
-    _vpsSocket = TcpSocket::connect ( this, *_vpsAddress, true ); // Raw socket
+    _vpsAddress = selectBestRelay(getGlobalIpVersionPreference());
+    if (_vpsAddress == relayServers.cend()) {
+        // No suitable relay found, fallback to first available  
+        _vpsAddress = relayServers.cbegin();
+    }
+    if (_vpsAddress != relayServers.cend()) {
+        _vpsSocket = TcpSocket::connect ( this, *_vpsAddress, true ); // Raw socket
+    }
 
     try
     {
@@ -215,8 +275,14 @@ SmartSocket::SmartSocket ( Owner *owner, const IpAddrPort& address, Socket::Prot
 
     if ( forceTun )
     {
-        _vpsAddress = relayServers.cbegin();
-        _vpsSocket = TcpSocket::connect ( this, *_vpsAddress, true );
+        _vpsAddress = selectBestRelay(getGlobalIpVersionPreference());
+        if (_vpsAddress == relayServers.cend()) {
+            // No suitable relay found, fallback to first available  
+            _vpsAddress = relayServers.cbegin();
+        }
+        if (_vpsAddress != relayServers.cend()) {
+            _vpsSocket = TcpSocket::connect ( this, *_vpsAddress, true );
+        }
         return;
     }
 
@@ -239,8 +305,14 @@ SmartSocket::SmartSocket ( std::shared_ptr<SocketOwner> owner, const IpAddrPort&
 
     if ( forceTun )
     {
-        _vpsAddress = relayServers.cbegin();
-        _vpsSocket = TcpSocket::connect ( this, *_vpsAddress, true );
+        _vpsAddress = selectBestRelay(getGlobalIpVersionPreference());
+        if (_vpsAddress == relayServers.cend()) {
+            // No suitable relay found, fallback to first available  
+            _vpsAddress = relayServers.cbegin();
+        }
+        if (_vpsAddress != relayServers.cend()) {
+            _vpsSocket = TcpSocket::connect ( this, *_vpsAddress, true );
+        }
         return;
     }
 
@@ -334,8 +406,14 @@ void SmartSocket::socketDisconnected ( Socket *socket )
 
         _directSocket.reset();
 
-        _vpsAddress = relayServers.cbegin();
-        _vpsSocket = TcpSocket::connect ( this, *_vpsAddress, true ); // Raw socket
+        _vpsAddress = selectBestRelay(getGlobalIpVersionPreference());
+        if (_vpsAddress == relayServers.cend()) {
+            // No suitable relay found, fallback to first available  
+            _vpsAddress = relayServers.cbegin();
+        }
+        if (_vpsAddress != relayServers.cend()) {
+            _vpsSocket = TcpSocket::connect ( this, *_vpsAddress, true ); // Raw socket
+        }
 
         if ( owner )
             ( ( SmartSocket::Owner * ) owner )->smartSocketSwitchedToUDP ( this );

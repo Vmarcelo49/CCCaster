@@ -2,3 +2,5 @@ melty.argoneus.com:3939
 melty-backup.argoneus.com:3939
 104.238.130.23:3939
 127.0.0.1:3939
+[2001:db8::1]:3939
+[::1]:3939
