@@ -59,6 +59,39 @@ TEST_F(IpAddrPortTest, ParseIPv6Addresses)
     EXPECT_EQ("::1", addr3.str());
 }
 
+TEST_F(IpAddrPortTest, ParsePortOnly)
+{
+    // Test port-only input (common when hosting)
+    IpAddrPort addr1("3939");
+    EXPECT_EQ("", addr1.addr);  // Address should be empty
+    EXPECT_EQ(3939, addr1.port);
+    EXPECT_TRUE(addr1.isV4);    // Default to IPv4 for port-only
+    EXPECT_EQ("3939", addr1.str());
+    
+    // Test different port numbers
+    IpAddrPort addr2("8080");
+    EXPECT_EQ("", addr2.addr);
+    EXPECT_EQ(8080, addr2.port);
+    EXPECT_TRUE(addr2.isV4);
+    EXPECT_EQ("8080", addr2.str());
+    
+    // Test maximum valid port
+    IpAddrPort addr3("65535");
+    EXPECT_EQ("", addr3.addr);
+    EXPECT_EQ(65535, addr3.port);
+    EXPECT_TRUE(addr3.isV4);
+    EXPECT_EQ("65535", addr3.str());
+    
+    // Test minimum valid port
+    IpAddrPort addr4("1");
+    EXPECT_EQ("", addr4.addr);
+    EXPECT_EQ(1, addr4.port);
+    EXPECT_TRUE(addr4.isV4);
+    EXPECT_EQ("1", addr4.str());
+    
+    LOG("Port-only parsing works correctly for hosting scenarios");
+}
+
 TEST_F(IpAddrPortTest, ParseHostnames)
 {
     // Test hostname with port

@@ -285,7 +285,21 @@ IpAddrPort::IpAddrPort ( const string& addrPort ) : addr ( addrPort ), port ( 0 
         // No colons or single colon - handle as IPv4 or invalid address
         if ( colonCount == 0 )
         {
-            // No port specified, just an address
+            // Check if this is just a port number (common when hosting)
+            stringstream ss( addrPort );
+            uint16_t testPort;
+            
+            // If the entire string is a valid port number (1-65535), treat it as port-only
+            if ( ss >> testPort && ss.eof() && testPort > 0 && testPort <= 65535 )
+            {
+                // This is just a port number - empty address, set port
+                addr.clear();
+                port = testPort;
+                isV4 = true;  // Default to IPv4 for port-only specification
+                return;
+            }
+            
+            // Otherwise, treat as address with no port specified
             addr = addrPort;
             isV4 = true;  // Assume IPv4 if no colons
             port = 0;
