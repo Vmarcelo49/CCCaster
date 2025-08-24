@@ -46,3 +46,6 @@ private:
 
 std::vector<std::string> getInternalIpAddresses();
 
+// Utility function to format IP address with port using proper IPv6 bracketing
+std::string formatIpAddressWithPort(const std::string& address, uint16_t port);
+

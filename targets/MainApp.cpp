@@ -4,6 +4,7 @@
 #include "ExternalIpAddress.hpp"
 #include "SmartSocket.hpp"
 #include "UdpSocket.hpp"
+#include "IpAddrPort.hpp"
 #include "Constants.hpp"
 #include "Exceptions.hpp"
 #include "Algorithms.hpp"
@@ -648,7 +649,7 @@ struct MainApp
         }
 
         uiRecvSocket = UdpSocket::bind ( this, 0 );
-        uiSendSocket = UdpSocket::bind ( 0, { "127.0.0.1", uiRecvSocket->address.port } );
+        uiSendSocket = UdpSocket::bind ( 0, { getLoopbackAddress(), uiRecvSocket->address.port } );
         isWaitingForUser = true;
 
         // Unblock the thread waiting for user confirmation
@@ -1460,11 +1461,11 @@ private:
         }
         else
         {
-            setClipboard ( format ( "%s:%u", externalIpAddress.address, port ) );
-            ui.display ( format ( "%s at %s:%u%s\n(Address copied to clipboard)",
+            string formattedAddress = formatIpAddressWithPort(externalIpAddress.address, port);
+            setClipboard ( formattedAddress );
+            ui.display ( format ( "%s at %s%s\n(Address copied to clipboard)",
                                   ( clientMode.isBroadcast() ? "Broadcasting" : "Hosting" ),
-                                  externalIpAddress.address,
-                                  port,
+                                  formattedAddress.c_str(),
                                   ( clientMode.isTraining() ? " (training mode)" : "" ) ) );
         }
         ui.hostReady();

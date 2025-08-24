@@ -25,6 +25,29 @@ IpVersionPreference getGlobalIpVersionPreference()
     return globalIpVersionPreference;
 }
 
+std::string getLoopbackAddress()
+{
+    IpVersionPreference preference = getGlobalIpVersionPreference();
+    
+    switch ( preference )
+    {
+        case IpVersionPreference::IPv4Only:
+            return "127.0.0.1";
+        case IpVersionPreference::IPv6Only:
+            return "::1";
+        case IpVersionPreference::DualStack:
+        default:
+            // For DualStack, prefer IPv4 loopback for better compatibility
+            // since most internal communication expects IPv4
+            return "127.0.0.1";
+    }
+}
+
+bool isLoopbackAddress(const std::string& addr)
+{
+    return (addr == "127.0.0.1" || addr == "::1" || addr == "localhost");
+}
+
 
 shared_ptr<addrinfo> getAddrInfo ( const string& addr, uint16_t port, bool isV4, bool passive )
 {

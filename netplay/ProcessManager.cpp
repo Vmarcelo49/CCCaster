@@ -47,7 +47,7 @@ void ProcessManager::socketAccepted ( Socket *serverSocket )
 
     LOG ( "ipcSocket=%08x", _ipcSocket.get() );
 
-    ASSERT ( _ipcSocket->address.addr == "127.0.0.1" );
+    ASSERT ( isLoopbackAddress(_ipcSocket->address.addr) );
 
     _ipcSocket->send ( new IpcConnected() );
 }
@@ -55,7 +55,7 @@ void ProcessManager::socketAccepted ( Socket *serverSocket )
 void ProcessManager::socketConnected ( Socket *socket )
 {
     ASSERT ( socket == _ipcSocket.get() );
-    ASSERT ( _ipcSocket->address.addr == "127.0.0.1" );
+    ASSERT ( isLoopbackAddress(_ipcSocket->address.addr) );
 
     _ipcSocket->send ( new IpcConnected() );
 }
@@ -75,7 +75,7 @@ void ProcessManager::socketDisconnected ( Socket *socket )
 void ProcessManager::socketRead ( Socket *socket, const MsgPtr& msg, const IpAddrPort& address )
 {
     ASSERT ( socket == _ipcSocket.get() );
-    ASSERT ( address.addr == "127.0.0.1" );
+    ASSERT ( isLoopbackAddress(address.addr) );
 
     if ( msg && msg->getMsgType() == MsgType::IpcConnected )
     {
@@ -220,7 +220,7 @@ void ProcessManager::openGame ( bool highPriority, bool isTraining )
     LOG ( "Pipe connected" );
 
     DWORD bytes;
-    IpAddrPort ipcHost ( "127.0.0.1", 0 );
+    IpAddrPort ipcHost ( getLoopbackAddress(), 0 );
 
     if ( ! ReadFile ( _pipe, &ipcHost.port, sizeof ( ipcHost.port ), &bytes, 0 ) )
         THROW_WIN_EXCEPTION ( GetLastError(), "ReadFile failed", ERROR_PIPE_RW );

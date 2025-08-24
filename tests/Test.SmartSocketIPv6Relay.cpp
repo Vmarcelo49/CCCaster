@@ -1,7 +1,10 @@
-#include "Test.hpp"
+#ifndef RELEASE
+
 #include "SmartSocket.hpp"
 #include "IpAddrPort.hpp"
+#include "Logger.hpp"
 
+#include <gtest/gtest.h>
 #include <fstream>
 #include <sstream>
 
@@ -103,3 +106,5 @@ TEST_F(SmartSocketIPv6RelayTest, EmptyRelayListHandledGracefully)
     LOG("Empty relay list should be handled gracefully without crashes");
     SUCCEED(); // This test validates graceful handling of empty relay list
 }
+
+#endif // NOT RELEASE

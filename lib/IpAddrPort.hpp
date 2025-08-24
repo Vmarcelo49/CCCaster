@@ -24,6 +24,12 @@ std::shared_ptr<addrinfo> getAddrInfoWithPreference ( const std::string& addr, u
 void setGlobalIpVersionPreference(IpVersionPreference preference);
 IpVersionPreference getGlobalIpVersionPreference();
 
+// Get the appropriate loopback address based on IP version preference
+std::string getLoopbackAddress();
+
+// Check if an address is a loopback address (either IPv4 or IPv6)
+bool isLoopbackAddress(const std::string& addr);
+
 std::string getAddrFromSockAddr ( const sockaddr *sa );
 
 uint16_t getPortFromSockAddr ( const sockaddr *sa );

@@ -190,7 +190,7 @@ void JoystickDetector::start()
     LOG ( "Starting joystick detection" );
 
     recvSocket = UdpSocket::bind ( this, 0 );
-    sendSocket = UdpSocket::bind ( 0, { "127.0.0.1", recvSocket->address.port } );
+    sendSocket = UdpSocket::bind ( 0, { getLoopbackAddress(), recvSocket->address.port } );
 
     joystickThread.start();
 

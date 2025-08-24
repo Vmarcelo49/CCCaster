@@ -1,6 +1,7 @@
 #include "ExternalIpAddress.hpp"
 #include "IpAddrPort.hpp"
 #include "Logger.hpp"
+#include "StringUtils.hpp"
 
 #include <ws2tcpip.h>
 #include <winsock2.h>
@@ -15,7 +16,7 @@ using namespace std;
 const string ExternalIpAddress::Unknown = "Unknown";
 
 // Web services to query for external IP address
-static const vector<string> ExternalIpServices =
+static const vector<string> ExternalIpServicesIPv4 =
 {
     "http://checkip.amazonaws.com",
     "http://ipv4.wtfismyip.com/text",
@@ -23,8 +24,40 @@ static const vector<string> ExternalIpServices =
     "http://ifcfg.net",
 };
 
+static const vector<string> ExternalIpServicesIPv6 =
+{
+    "http://ipv6.wtfismyip.com/text",
+    "http://ipv6.icanhazip.com",
+    "http://v6.ident.me",
+    "http://ifconfig.co",
+};
+
+static const vector<string> ExternalIpServicesDualStack =
+{
+    "http://ifconfig.co",  // Supports both IPv4 and IPv6
+    "http://checkip.amazonaws.com",
+    "http://ipv4.wtfismyip.com/text",
+    "http://ifcfg.net",
+};
+
 
 ExternalIpAddress::ExternalIpAddress ( Owner *owner ) : owner ( owner ) {}
+
+// Helper function to get the appropriate service list based on IP version preference
+static const vector<string>& getExternalIpServices()
+{
+    IpVersionPreference preference = getGlobalIpVersionPreference();
+    switch ( preference )
+    {
+        case IpVersionPreference::IPv4Only:
+            return ExternalIpServicesIPv4;
+        case IpVersionPreference::IPv6Only:
+            return ExternalIpServicesIPv6;
+        case IpVersionPreference::DualStack:
+        default:
+            return ExternalIpServicesDualStack;
+    }
+}
 
 void ExternalIpAddress::httpResponse ( HttpGet *httpGet, int code, const string& data, uint32_t remainingBytes )
 {
@@ -32,7 +65,7 @@ void ExternalIpAddress::httpResponse ( HttpGet *httpGet, int code, const string&
 
     LOG ( "Received HTTP response (%d): '%s'", code, data );
 
-    if ( code != 200 || data.size() < 7 ) // Min IPv4 length, eg "1.1.1.1" TODO actually validate this
+    if ( code != 200 || data.size() < 3 ) // Min length for any IP address (e.g., "::1")
     {
         httpFailed ( httpGet );
         return;
@@ -54,7 +87,9 @@ void ExternalIpAddress::httpFailed ( HttpGet *httpGet )
 
     _httpGet.reset();
 
-    if ( _nextQueryIndex == ExternalIpServices.size() )
+    const vector<string>& services = getExternalIpServices();
+
+    if ( _nextQueryIndex >= services.size() )
     {
         address = Unknown;
 
@@ -63,7 +98,7 @@ void ExternalIpAddress::httpFailed ( HttpGet *httpGet )
         return;
     }
 
-    _httpGet.reset ( new HttpGet ( this, ExternalIpServices[_nextQueryIndex++] ) );
+    _httpGet.reset ( new HttpGet ( this, services[_nextQueryIndex++] ) );
     _httpGet->start();
 }
 
@@ -73,7 +108,8 @@ void ExternalIpAddress::start()
 
     _nextQueryIndex = 1;
 
-    _httpGet.reset ( new HttpGet ( this, ExternalIpServices[0] ) );
+    const vector<string>& services = getExternalIpServices();
+    _httpGet.reset ( new HttpGet ( this, services[0] ) );
     _httpGet->start();
 }
 
@@ -140,5 +176,24 @@ std::vector<std::string> getInternalIpAddresses() {
     WSACleanup();
 
     return res;
+}
+
+// Utility function to format IP address with port using proper IPv6 bracketing
+std::string formatIpAddressWithPort(const std::string& address, uint16_t port)
+{
+    if (address.empty()) {
+        return "";
+    }
+    
+    // Check if this is an IPv6 address (contains colons and not already bracketed)
+    bool isIPv6 = address.find(':') != std::string::npos && address[0] != '[';
+    
+    if (isIPv6) {
+        // IPv6 addresses need brackets when specifying port
+        return format("[%s]:%u", address.c_str(), port);
+    } else {
+        // IPv4 addresses use simple colon notation
+        return format("%s:%u", address.c_str(), port);
+    }
 }
 

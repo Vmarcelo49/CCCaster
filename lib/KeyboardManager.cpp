@@ -180,7 +180,7 @@ void KeyboardManager::hook ( Owner *owner, bool externalHook )
     if ( ! externalHook )
     {
         _recvSocket = UdpSocket::bind ( this, 0 );
-        sendSocket = UdpSocket::bind ( 0, { "127.0.0.1", _recvSocket->address.port } );
+        sendSocket = UdpSocket::bind ( 0, { getLoopbackAddress(), _recvSocket->address.port } );
 
         keyboardThread.reset ( new KeyboardThread() );
         keyboardThread->start();
