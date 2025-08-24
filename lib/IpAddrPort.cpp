@@ -2,6 +2,7 @@
 #include "Exceptions.hpp"
 #include "ErrorStrings.hpp"
 #include "StringUtils.hpp"
+#include "../netplay/ProcessManager.hpp"
 
 #include <winsock2.h>
 #include <windows.h>
@@ -245,8 +246,10 @@ IpAddrPort::IpAddrPort ( const string& addrPort ) : addr ( addrPort ), port ( 0 
             uint16_t testPort;
             string remainingChars;
             
-            // For it to be a port, it must be all numeric and in valid port range (0-65535)
-            if ( ss >> testPort && ss.eof() && testPort >= 0 && testPort <= 65535 )
+            // For it to be a port, it must be all numeric and in valid port range
+            // Note: Port 0 is excluded on Wine due to networking compatibility issues
+            uint16_t minPort = ProcessManager::isWine() ? 1 : 0;
+            if ( ss >> testPort && ss.eof() && testPort >= minPort && testPort <= 65535 )
             {
                 // This looks like ::1:port format - verify the address part is valid
                 string addrPart = addrPort.substr(0, lastColonPos);
@@ -289,8 +292,10 @@ IpAddrPort::IpAddrPort ( const string& addrPort ) : addr ( addrPort ), port ( 0 
             stringstream ss( addrPort );
             uint16_t testPort;
             
-            // If the entire string is a valid port number (0-65535), treat it as port-only
-            if ( ss >> testPort && ss.eof() && testPort >= 0 && testPort <= 65535 )
+            // If the entire string is a valid port number, treat it as port-only
+            // Note: Port 0 is excluded on Wine due to networking compatibility issues
+            uint16_t minPort = ProcessManager::isWine() ? 1 : 0;
+            if ( ss >> testPort && ss.eof() && testPort >= minPort && testPort <= 65535 )
             {
                 // This is just a port number - empty address, set port
                 addr.clear();
