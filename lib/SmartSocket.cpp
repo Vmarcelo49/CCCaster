@@ -178,7 +178,7 @@ struct TunInfo
 
         size_t i, end = 0;
 
-        for ( i = 0; i < 22; ++i ) // max string length ("255.255.255.255:65535\0")
+        for ( i = 0; i < 64; ++i ) // max string length for IPv6 ("[2001:db8::1234:5678:90ab:cdef]:65535\0")
         {
             if ( start + i >= len )
                 break;
@@ -191,7 +191,7 @@ struct TunInfo
         }
 
         // Not enough data or failed to find null-terminator
-        if ( end == 0 || i == 22 )
+        if ( end == 0 || i == 64 )
         {
             consumed = 0;
             return TunInfo();

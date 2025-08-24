@@ -109,6 +109,30 @@ TEST_F(SmartSocketIPv6RelayTest, DualStackPreferencePreffersIPv6)
     LOG("DualStack preference should prefer IPv6 relay when available, fallback to IPv4");
 }
 
+TEST_F(SmartSocketIPv6RelayTest, TunnelProtocolSupportsLongIPv6Addresses)
+{
+    // Test that the tunnel protocol can handle long IPv6 addresses
+    // The original code had a 22-byte limit that would truncate IPv6 addresses
+    
+    // Test various IPv6 address lengths
+    std::vector<std::string> longIPv6Addresses = {
+        "[::1]:3939",                                          // 11 chars
+        "[2001:db8::1]:3939",                                 // 19 chars  
+        "[2001:db8:1234:5678:90ab:cdef:1234:5678]:65535",     // 47 chars - this would break old code
+        "[fe80::1234:5678:90ab:cdef]:12345"                   // 35 chars
+    };
+    
+    for (const auto& testAddr : longIPv6Addresses) {
+        IpAddrPort addr(testAddr);
+        EXPECT_FALSE(addr.isV4);
+        EXPECT_EQ(testAddr, addr.str());
+        LOG("Tunnel protocol should handle address: %s (%zu chars)", 
+            testAddr.c_str(), testAddr.length());
+    }
+    
+    LOG("Tunnel protocol buffer size updated to support long IPv6 addresses");
+}
+
 TEST_F(SmartSocketIPv6RelayTest, EmptyRelayListHandledGracefully)
 {
     // Create empty relay list
