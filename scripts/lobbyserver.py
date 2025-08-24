@@ -501,28 +501,77 @@ class RelayProtocol:
         self.on_con_lost.set_result(True)
 
 async def checkHostRelay( hostAddr ):
-    relay = "81.4.126.110:3939"
-    host, port = relay.split(":")
-    reader, writer = await asyncio.open_connection(
-        host, port)
-    writer.write(f"T{hostAddr}".encode())
-    data = await reader.read(100)
-    if not data:
-        print( "host down" )
-        writer.close()
+    # List of relay servers to try, including IPv6 options
+    relay_servers = [
+        "81.4.126.110:3939",      # Original IPv4 relay
+        "[2001:db8::1]:3939",     # IPv6 relay (example)
+        "[::1]:3939",             # IPv6 localhost for testing
+        "127.0.0.1:3939"          # IPv4 localhost fallback
+    ]
+    
+    for relay in relay_servers:
+        try:
+            # Handle IPv6 addresses in brackets
+            if relay.startswith('['):
+                # IPv6 address in brackets: [address]:port
+                bracket_end = relay.find(']')
+                if bracket_end == -1:
+                    continue
+                host = relay[1:bracket_end]
+                port_part = relay[bracket_end+1:]
+                if port_part.startswith(':'):
+                    port = port_part[1:]
+                else:
+                    continue
+            else:
+                # IPv4 address: host:port
+                host, port = relay.split(":")
+            
+            # Try to connect to this relay
+            reader, writer = await asyncio.open_connection(host, port)
+            writer.write(f"T{hostAddr}".encode())
+            data = await reader.read(100)
+            if not data:
+                print(f"Host down on relay {relay}")
+                writer.close()
+                continue
+                
+            matchid = struct.unpack('i', data[9:])[0]
+            
+            # Determine socket family based on host address
+            try:
+                import ipaddress
+                ip = ipaddress.ip_address(host)
+                if isinstance(ip, ipaddress.IPv6Address):
+                    sock = socket.socket(socket.AF_INET6, socket.SOCK_DGRAM)
+                else:
+                    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            except:
+                # Fallback to IPv4 if address parsing fails
+                sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+                
+            loop = asyncio.get_running_loop()
+            on_con_lost = loop.create_future()
+            retDict = {}
+            transport, protocol = await loop.create_datagram_endpoint(
+                lambda: RelayProtocol(on_con_lost, (host, int(port)), matchid, retDict),
+                sock=sock)
+            data = await reader.read(200)
+            matchid2 = struct.unpack('i', data[7:11])[0]
+            ip = data[11:-1].decode()
+            host, port = ip.split(":")
+            
+            # Success with this relay
+            print(f"Successfully connected via relay {relay}")
+            break
+            
+        except Exception as e:
+            print(f"Failed to connect to relay {relay}: {e}")
+            continue
+    else:
+        # All relays failed
+        print("All relay servers failed")
         return False
-    matchid = struct.unpack('i', data[9:])[0]
-    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM) # UDP
-    loop = asyncio.get_running_loop()
-    on_con_lost = loop.create_future()
-    retDict = {}
-    transport, protocol = await loop.create_datagram_endpoint(
-        lambda: RelayProtocol(on_con_lost, (host, int(port)), matchid, retDict),
-        sock=sock)
-    data = await reader.read(200)
-    matchid2 = struct.unpack('i', data[7:11])[0]
-    ip = data[11:-1].decode()
-    host, port = ip.split(":")
     addr =  ( host, int(port))
     protocol.addr = addr
     for _ in range(10):
