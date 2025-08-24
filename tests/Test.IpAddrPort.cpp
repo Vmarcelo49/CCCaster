@@ -89,6 +89,13 @@ TEST_F(IpAddrPortTest, ParsePortOnly)
     EXPECT_TRUE(addr4.isV4);
     EXPECT_EQ("1", addr4.str());
     
+    // Test port 0 (should bind to any available port - common for hosting)
+    IpAddrPort addr5("0");
+    EXPECT_EQ("", addr5.addr);  // Address should be empty
+    EXPECT_EQ(0, addr5.port);   // Port should be 0 (system will assign available port)
+    EXPECT_TRUE(addr5.isV4);    // Default to IPv4 for port-only
+    EXPECT_EQ("0", addr5.str());
+    
     LOG("Port-only parsing works correctly for hosting scenarios");
 }
 
